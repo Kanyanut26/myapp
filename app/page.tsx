@@ -272,7 +272,7 @@ export default function Page() {
               </div>
 
               <h2 className="mb-2 mt-4 font-bold">โปรโมชันวันนี้</h2>
-              {([["gem", "#6D4AE0", "#E8C872", "เพชรโบนัสเท่าตัว"], ["sword", "#B8315F", "#fff", "ซื้อ 2 แถม 1"]] as const).map(([k, b, f, t]) => (
+              {([["gem", "#bebebe", "#E8C872", "เพชรโบนัสเท่าตัว"], ["sword", "#B8315F", "#fff", "ซื้อ 2 แถม 1"]] as const).map(([k, b, f, t]) => (
                 <div key={t} className={`${cardC} mb-2 flex items-center gap-3 p-3`}>
                   <Icon k={k} bg={b} fg={f} size={48} radius={12} />
                   <div className="flex-1"><b>{t}</b><div className="text-xs text-[#B9B0D6]">เติมครบ ฿ 299 รับของแถม</div></div>
