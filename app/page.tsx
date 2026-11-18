@@ -9,8 +9,9 @@ const noto = Noto_Sans_Thai({ subsets: ["thai", "latin"], weight: ["400", "700"]
 type Platform = "mobile" | "pc" | "console";
 type Game = { id: string; name: string; platform: Platform; icon: string; bg: string; fg: string };
 type Pkg = { id: string; amount: string; price: number; hot?: boolean };
-type Screen = "home" | "pkg" | "pay" | "done";
-type Order = { id: string; time: string; game: string; amount: string; uid: string; pay: string; total: number };
+type Screen = "home" | "pkg" | "pay" | "done" | "orders";
+type Status = "processing" | "success";
+type Order = { id: string; time: string; gameId: string; game: string; amount: string; uid: string; pay: string; total: number; status: Status };
 
 const GAMES: Game[] = [
   { id: "a", name: "เกม A", platform: "mobile", icon: "gem", bg: "#7C4DFF", fg: "#FFD600" },
@@ -34,6 +35,10 @@ const PAYS = [
   { id: "card", name: "บัตรเครดิต / เดบิต", icon: "card", bg: "#FF6D00" },
   { id: "wallet", name: "TrueMoney Wallet", icon: "wallet", bg: "#FF2E93" },
   { id: "bank", name: "โอนผ่านแอปธนาคาร", icon: "bank", bg: "#00C853" },
+];
+const SEED: Order[] = [
+  { id: "TP2611172105", time: "17/11/69 21:05", gameId: "a", game: "เกม A", amount: "660 เพชร", uid: "123456789", pay: "promptpay", total: 299, status: "success" },
+  { id: "TP2611151830", time: "15/11/69 18:30", gameId: "b", game: "เกม B", amount: "330 เพชร", uid: "987654321", pay: "wallet", total: 149, status: "success" },
 ];
 const COUPONS: Record<string, number> = { WELCOME10: 0.1 };
 const FILTERS: [Platform | "all", string][] = [["all", "ทั้งหมด"], ["mobile", "มือถือ"], ["pc", "พีซี"], ["console", "คอนโซล"]];
@@ -89,6 +94,9 @@ export default function Page() {
   const [coupon, setCoupon] = useState("");
   const [rate, setRate] = useState(0);
   const [order, setOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>(SEED);
+  const [ordFilter, setOrdFilter] = useState<"all" | Status>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "error" | "ok" | "info" } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,16 +135,30 @@ export default function Page() {
     setBusy(true);
     // TODO: เรียก API จริง เช่น fetch("/api/orders", { method: "POST", body: JSON.stringify({...}) })
     await new Promise((r) => setTimeout(r, 900));
-    setOrder({
+    const placed: Order = {
       id: `TP${Date.now().toString().slice(-10)}`,
       time: new Date().toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }),
-      game: game.name, amount: pkg.amount, uid, pay, total,
-    });
+      gameId: game.id, game: game.name, amount: pkg.amount, uid, pay, total, status: "processing",
+    };
+    setOrder(placed);
+    setOrders((prev) => [placed, ...prev]);
+    setTimeout(() => setOrders((prev) => prev.map((o) => (o.id === placed.id ? { ...o, status: "success" } : o))), 6000);
     setBusy(false);
     setScreen("done");
   }
 
   const soon = (n: string) => say(`${n}: เร็วๆ นี้`, "info");
+  const shown = orders.filter((o) => ordFilter === "all" || o.status === ordFilter);
+
+  const Nav = ({ active }: { active: number }) => (
+    <nav className="absolute inset-x-0 bottom-0 flex h-[68px] items-center justify-around border-t border-[#3B2480] bg-[#1E0E45] text-[11px]">
+      {([["หน้าแรก", "crown"], ["คำสั่งซื้อ", "cart"], ["โปรโมชัน", "star"], ["บัญชี", "shield"]] as const).map(([n, k], i) => (
+        <button key={n} onClick={() => (i === 0 ? reset() : i === 1 ? setScreen("orders") : soon(n))} className={`flex flex-col items-center gap-1 ${i === active ? "font-bold text-[#FFD600]" : "text-[#C4B5FD]"}`}>
+          <Glyph k={k} fill="currentColor" size={24} />{n}
+        </button>
+      ))}
+    </nav>
+  );
 
   const Back = ({ to, title }: { to: Screen; title: string }) => (
     <div className="flex h-[60px] items-center">
@@ -205,13 +227,7 @@ export default function Page() {
                 </div>
               ))}
             </div>
-            <nav className="absolute inset-x-0 bottom-0 flex h-[68px] items-center justify-around border-t border-[#3B2480] bg-[#1E0E45] text-[11px]">
-              {([["หน้าแรก", "crown"], ["คำสั่งซื้อ", "cart"], ["โปรโมชัน", "star"], ["บัญชี", "shield"]] as const).map(([n, k], i) => (
-                <button key={n} onClick={() => (i === 0 ? reset() : soon(n))} className={`flex flex-col items-center gap-1 ${i === 0 ? "font-bold text-[#FFD600]" : "text-[#C4B5FD]"}`}>
-                  <Glyph k={k} fill="currentColor" size={24} />{n}
-                </button>
-              ))}
-            </nav>
+            <Nav active={0} />
           </>
         )}
 
@@ -282,6 +298,46 @@ export default function Page() {
           </>
         )}
 
+        {/* 5) คำสั่งซื้อของฉัน */}
+        {screen === "orders" && (
+          <>
+            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
+              <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">คำสั่งซื้อของฉัน</h1></div>
+              <div className="mb-4 flex gap-2 overflow-x-auto">
+                {([["all", "ทั้งหมด"], ["processing", "กำลังเติม"], ["success", "สำเร็จ"]] as const).map(([k, n]) => (
+                  <button key={k} onClick={() => setOrdFilter(k)} className={`h-9 shrink-0 rounded-full px-4 text-[13px] ${ordFilter === k ? "bg-[#FFD600] font-bold text-[#14082E]" : "bg-[#2F1A6B] text-[#E9E1FF]"}`}>{n}</button>
+                ))}
+              </div>
+              {shown.length === 0 && <p className="py-10 text-center text-sm opacity-70">ยังไม่มีคำสั่งซื้อ</p>}
+              {shown.map((o) => {
+                const g = GAMES.find((x) => x.id === o.gameId) ?? GAMES[0];
+                const ok = o.status === "success";
+                const isOpen = openId === o.id;
+                return (
+                  <button key={o.id} aria-expanded={isOpen} onClick={() => setOpenId(isOpen ? null : o.id)} className={`${cardC} mb-3 block w-full p-3 text-left`}>
+                    <div className="flex items-center gap-3">
+                      <Icon k={g.icon} bg={g.bg} fg={g.fg} size={48} radius={12} />
+                      <div className="flex-1"><b>{o.game} · {o.amount}</b><div className="text-xs text-[#C4B5FD]">{o.time}</div></div>
+                      <div className="text-right">
+                        <b className="text-[#FFD600]">{baht(o.total)}</b>
+                        <div className="mt-1"><span className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-[#14082E] ${ok ? "bg-[#00E676]" : "bg-[#FFD600]"}`}>{ok ? "สำเร็จ" : "กำลังเติม"}</span></div>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div className="mt-3 border-t border-[#3B2480] pt-2 text-sm">
+                        {([["เลขที่คำสั่งซื้อ", o.id], ["UID", o.uid], ["วิธีชำระเงิน", PAYS.find((m) => m.id === o.pay)?.name ?? o.pay]] as const).map(([a, b]) => (
+                          <div key={a} className="flex justify-between py-1"><span className="text-[#C4B5FD]">{a}</span><span>{b}</span></div>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <Nav active={1} />
+          </>
+        )}
+
         {/* 4) สำเร็จ */}
         {screen === "done" && order && (
           <>
@@ -311,7 +367,7 @@ export default function Page() {
               </div>
             </div>
             <Footer>
-              <button className={btnY} onClick={() => soon("คำสั่งซื้อของฉัน")}>ดูคำสั่งซื้อของฉัน</button>
+              <button className={btnY} onClick={() => { setOrdFilter("all"); setScreen("orders"); }}>ดูคำสั่งซื้อของฉัน</button>
               <button className={btnO} onClick={reset}>กลับหน้าแรก</button>
             </Footer>
           </>
