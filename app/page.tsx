@@ -83,6 +83,16 @@ const GLYPH: Record<string, ReactNode> = {
   mail: (<><path d="M5 10h38v28H5z" /><path d="M5 12l19 15 19-15" fill="none" stroke="#0F0F11" strokeWidth="3" /></>),
 };
 
+const RICH: Record<string, ReactNode> = {
+  gem: (<><path d="M9 17L16 7H32L39 17L24 43Z" fill="url(#gGold)"/><path d="M16 7H32L28 17H20Z" fill="#fff" fillOpacity=".5"/><path d="M9 17H20L24 43Z" fill="#000" fillOpacity=".18"/><path d="M39 17H28L24 43Z" fill="#fff" fillOpacity=".14"/><path d="M9 17H39" stroke="#fff" strokeOpacity=".55" strokeWidth="1.2"/></>),
+  sword: (<><path d="M38 5l5 5-21 21-5-5z" fill="url(#gSilver)"/><path d="M40.5 7.5L19.5 28.5" stroke="#fff" strokeOpacity=".55" strokeWidth="1"/><path d="M38 5l5 5-1.6 1.6-5-5z" fill="#fff" fillOpacity=".6"/><path d="M13.3 24.8L15.8 22.3L25.7 32.2L23.2 34.7z" fill="url(#gGold)"/><path d="M17.3 29.1L19 30.8L14 35.8L12.3 34.1z" fill="url(#gBronze)"/><circle cx="11.7" cy="36.3" r="2.6" fill="url(#gGold)"/></>),
+  crown: (<><path d="M6 36V14l10 10 8-15 8 15 10-10v22z" fill="url(#gGold)"/><path d="M24 9l8 15 10-10v22H24z" fill="#000" fillOpacity=".14"/><rect x="6" y="36" width="36" height="5" rx="2" fill="url(#gBronze)"/><circle cx="6" cy="13" r="2.6" fill="#fff"/><circle cx="24" cy="8" r="2.8" fill="#fff"/><circle cx="42" cy="13" r="2.6" fill="#fff"/><circle cx="24" cy="38.5" r="1.8" fill="#fff" fillOpacity=".9"/></>),
+  shield: (<><path d="M24 4l16 5v14c0 10-7 17-16 21-9-4-16-11-16-21V9z" fill="url(#gSilver)"/><path d="M24 4l16 5v14c0 10-7 17-16 21z" fill="#000" fillOpacity=".12"/><path d="M24 9l11 3.5V23c0 7-5 12.5-11 15.5C18 35.5 13 30 13 23V12.5z" fill="#141417" fillOpacity=".88"/><path d="M24 15l6 13-6-3-6 3z" fill="url(#gGold)"/></>),
+  car: (<><path d="M5 30l4-11c1-2.5 3-3 5-3h20c2 0 4 .5 5 3l4 11v7H5z" fill="url(#gSilver)"/><path d="M12 19h24l2.5 7h-29z" fill="#141417" fillOpacity=".78"/><path d="M5 30h38v2H5z" fill="#fff" fillOpacity=".35"/><circle cx="14" cy="37" r="5" fill="#141417" stroke="url(#gGold)" strokeWidth="2"/><circle cx="34" cy="37" r="5" fill="#141417" stroke="url(#gGold)" strokeWidth="2"/><circle cx="14" cy="37" r="1.8" fill="url(#gGold)"/><circle cx="34" cy="37" r="1.8" fill="url(#gGold)"/><circle cx="9" cy="30" r="1.8" fill="url(#gGold)"/><circle cx="39" cy="30" r="1.8" fill="url(#gGold)"/></>),
+  star: (<><path d="M24 5l5.5 12 13 1.5-9.7 8.8 2.8 12.8L24 33l-11.6 7.1 2.8-12.8L5.5 18.5l13-1.5z" fill="url(#gGold)"/><path d="M24 5l5.5 12 13 1.5-9.7 8.8 2.8 12.8L24 33z" fill="#000" fillOpacity=".15"/><path d="M24 5l-5.5 12-13 1.5" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.2"/></>),
+};
+GLYPH.gem = RICH.gem;
+
 function Glyph({ k, fill, size }: { k: string; fill: string; size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill={fill} aria-hidden="true">
@@ -92,6 +102,13 @@ function Glyph({ k, fill, size }: { k: string; fill: string; size: number }) {
 }
 
 function Icon({ k, bg, fg = "#fff", size = 48, radius = 14 }: { k: string; bg: string; fg?: string; size?: number; radius?: number }) {
+  if (RICH[k]) {
+    return (
+      <div className="flex shrink-0 items-center justify-center" style={{ width: size, height: size, borderRadius: radius, background: `radial-gradient(circle at 30% 18%,rgba(255,255,255,.26),transparent 55%),linear-gradient(150deg,${bg},#141417)`, boxShadow: `inset 0 0 0 1px rgba(232,200,114,.45),0 8px 18px -10px ${bg}` }}>
+        <svg width={Math.round(size * 0.74)} height={Math.round(size * 0.74)} viewBox="0 0 48 48" aria-hidden="true" style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,.45))" }}>{RICH[k]}</svg>
+      </div>
+    );
+  }
   return (
     <div className="flex shrink-0 items-center justify-center" style={{ width: size, height: size, borderRadius: radius, background: `linear-gradient(145deg,rgba(255,255,255,.25),rgba(255,255,255,0) 55%),${bg}`, boxShadow: `inset 0 1px 0 rgba(255,255,255,.3),0 8px 18px -10px ${bg}` }}>
       <Glyph k={k} fill={fg} size={Math.round(size * 0.72)} />
@@ -233,6 +250,7 @@ export default function Page() {
           </div>
         )}
 
+        <svg width="0" height="0" className="absolute" aria-hidden="true"><defs><linearGradient id="gGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFF3C4"/><stop offset=".5" stopColor="#E8C872"/><stop offset="1" stopColor="#B8892B"/></linearGradient><linearGradient id="gSilver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FAFAFC"/><stop offset=".55" stopColor="#B5B3BC"/><stop offset="1" stopColor="#6E6E78"/></linearGradient><linearGradient id="gBronze" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#E2B66B"/><stop offset=".6" stopColor="#9A6724"/><stop offset="1" stopColor="#6B4415"/></linearGradient></defs></svg>
         <style>{`@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){*{animation:none!important}}`}</style>
         <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[radial-gradient(circle,rgba(212,175,55,.2),transparent_65%)]" />
         <div className="pointer-events-none absolute -left-20 bottom-14 h-64 w-64 rounded-full bg-[radial-gradient(circle,rgba(190,190,200,.09),transparent_65%)]" />
@@ -402,7 +420,7 @@ export default function Page() {
             <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
               <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">บัญชี</h1></div>
               <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#44444C] to-[#1F1F24] p-4">
-                <Icon k="crown" bg="#9A6724" fg="#E8C872" size={64} radius={32} />
+                <div className="rounded-full bg-[conic-gradient(from_200deg,#F7E7A9,#B8892B,#F7E7A9,#8A6A2F,#F7E7A9)] p-[3px]"><Icon k="crown" bg="#3A3A41" fg="#E8C872" size={64} radius={32} /></div>
                 <div className="flex-1"><b className="text-lg">ผู้เล่นตัวอย่าง</b><div className="text-xs">ID 10023456</div></div>
                 <span className="rounded-full bg-[#E8C872] px-2.5 py-0.5 text-xs font-bold text-[#0F0F11]">สมาชิก Gold</span>
               </div>
