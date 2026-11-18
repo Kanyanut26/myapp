@@ -9,7 +9,7 @@ const noto = Noto_Sans_Thai({ subsets: ["thai", "latin"], weight: ["400", "700"]
 type Platform = "mobile" | "pc" | "console";
 type Game = { id: string; name: string; platform: Platform; icon: string; bg: string; fg: string };
 type Pkg = { id: string; amount: string; price: number; hot?: boolean };
-type Screen = "home" | "pkg" | "pay" | "done" | "orders" | "promos";
+type Screen = "home" | "pkg" | "pay" | "done" | "orders" | "promos" | "profile";
 type Status = "processing" | "success";
 type Order = { id: string; time: string; gameId: string; game: string; amount: string; uid: string; pay: string; total: number; status: Status };
 
@@ -107,6 +107,8 @@ export default function Page() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [savedCode, setSavedCode] = useState("");
   const [promoFilter, setPromoFilter] = useState("ทั้งหมด");
+  const [notif, setNotif] = useState(true);
+  const [lastUid, setLastUid] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "error" | "ok" | "info" } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -152,6 +154,7 @@ export default function Page() {
       gameId: game.id, game: game.name, amount: pkg.amount, uid, pay, total, status: "processing",
     };
     setOrder(placed);
+    setLastUid(uid);
     setOrders((prev) => [placed, ...prev]);
     setTimeout(() => setOrders((prev) => prev.map((o) => (o.id === placed.id ? { ...o, status: "success" } : o))), 6000);
     setBusy(false);
@@ -165,11 +168,19 @@ export default function Page() {
   const Nav = ({ active }: { active: number }) => (
     <nav className="absolute inset-x-0 bottom-0 flex h-[68px] items-center justify-around border-t border-[#3B2480] bg-[#1E0E45] text-[11px]">
       {([["หน้าแรก", "crown"], ["คำสั่งซื้อ", "cart"], ["โปรโมชัน", "star"], ["บัญชี", "shield"]] as const).map(([n, k], i) => (
-        <button key={n} onClick={() => (i === 0 ? reset() : i === 1 ? setScreen("orders") : i === 2 ? setScreen("promos") : soon(n))} className={`flex flex-col items-center gap-1 ${i === active ? "font-bold text-[#FFD600]" : "text-[#C4B5FD]"}`}>
+        <button key={n} onClick={() => (i === 0 ? reset() : i === 1 ? setScreen("orders") : i === 2 ? setScreen("promos") : setScreen("profile"))} className={`flex flex-col items-center gap-1 ${i === active ? "font-bold text-[#FFD600]" : "text-[#C4B5FD]"}`}>
           <Glyph k={k} fill="currentColor" size={24} />{n}
         </button>
       ))}
     </nav>
+  );
+
+  const MenuRow = ({ k, bg, title, sub, onClick }: { k: string; bg: string; title: string; sub?: string; onClick: () => void }) => (
+    <button onClick={onClick} className="flex w-full items-center gap-3 border-b border-[#3B2480] py-3 text-left last:border-0">
+      <Icon k={k} bg={bg} size={36} radius={10} />
+      <div className="flex-1"><div>{title}</div>{sub && <div className="text-xs text-[#C4B5FD]">{sub}</div>}</div>
+      <span className="text-[#C4B5FD]" aria-hidden="true">›</span>
+    </button>
   );
 
   const Back = ({ to, title }: { to: Screen; title: string }) => (
@@ -307,6 +318,41 @@ export default function Page() {
             <Footer>
               <button className={btnY} disabled={busy} onClick={submit}>{busy ? "กำลังดำเนินการ…" : `ชำระเงิน ${baht(total)}`}</button>
             </Footer>
+          </>
+        )}
+
+        {/* 7) บัญชี */}
+        {screen === "profile" && (
+          <>
+            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
+              <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">บัญชี</h1></div>
+              <div className="flex items-center gap-4 rounded-2xl bg-[#6C2BFF] p-4">
+                <Icon k="crown" bg="#FF2E93" fg="#FFD600" size={64} radius={32} />
+                <div className="flex-1"><b className="text-lg">ผู้เล่นตัวอย่าง</b><div className="text-xs">ID 10023456</div></div>
+                <span className="rounded-full bg-[#FFD600] px-2.5 py-0.5 text-xs font-bold text-[#14082E]">สมาชิก Gold</span>
+              </div>
+              <div className={`${cardC} mt-3 flex py-3`}>
+                {([[orders.length, "คำสั่งซื้อ"], [baht(orders.reduce((a, o) => a + o.total, 0)), "ยอดเติมรวม"], [savedCode ? 1 : 0, "โค้ดที่เก็บไว้"]] as const).map(([v, l]) => (
+                  <div key={l} className="flex flex-1 flex-col items-center gap-0.5"><b className="text-lg text-[#FFD600]">{v}</b><span className="text-xs text-[#C4B5FD]">{l}</span></div>
+                ))}
+              </div>
+              <div className={`${cardC} mt-3 px-3`}>
+                <MenuRow k="shield" bg="#7C4DFF" title="ข้อมูลส่วนตัว" sub="ผู้เล่นตัวอย่าง" onClick={() => soon("ข้อมูลส่วนตัว")} />
+                <MenuRow k="gem" bg="#FF2E93" title="ไอดีเกมที่บันทึกไว้" sub={lastUid || "ยังไม่มี"} onClick={() => soon("ไอดีเกม")} />
+                <MenuRow k="cart" bg="#FF6D00" title="คำสั่งซื้อของฉัน" sub={`${orders.length} รายการ`} onClick={() => { setOrdFilter("all"); setScreen("orders"); }} />
+                <MenuRow k="star" bg="#00B8D4" title="โปรโมชันของฉัน" sub={savedCode ? `เก็บโค้ด ${savedCode}` : "ยังไม่ได้เก็บโค้ด"} onClick={() => setScreen("promos")} />
+                <div className="flex items-center gap-3 border-b border-[#3B2480] py-3">
+                  <Icon k="star" bg="#FFD600" fg="#14082E" size={36} radius={10} />
+                  <div className="flex-1">การแจ้งเตือน</div>
+                  <button role="switch" aria-checked={notif} aria-label="การแจ้งเตือน" onClick={() => setNotif(!notif)} className={`relative h-7 w-12 rounded-full ${notif ? "bg-[#00E676]" : "bg-[#3B2480]"}`}>
+                    <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all ${notif ? "left-[22px]" : "left-0.5"}`} />
+                  </button>
+                </div>
+                <MenuRow k="shield" bg="#00C853" title="ช่วยเหลือและติดต่อเรา" onClick={() => soon("ช่วยเหลือ")} />
+              </div>
+              <button className={`${btnO} mt-4 !h-[52px]`} onClick={() => soon("ออกจากระบบ")}>ออกจากระบบ</button>
+            </div>
+            <Nav active={3} />
           </>
         )}
 
