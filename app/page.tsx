@@ -10,7 +10,7 @@ const serif = Noto_Serif_Thai({ subsets: ["thai", "latin"], weight: ["600", "700
 type Platform = "mobile" | "pc" | "console";
 type Game = { id: string; name: string; platform: Platform; icon: string; bg: string; fg: string };
 type Pkg = { id: string; amount: string; price: number; hot?: boolean };
-type Screen = "home" | "pkg" | "pay" | "done" | "orders" | "promos" | "profile";
+type Screen = "home" | "pkg" | "pay" | "done" | "orders" | "promos" | "profile" | "help";
 type Status = "processing" | "success";
 type Order = { id: string; time: string; gameId: string; game: string; amount: string; uid: string; pay: string; total: number; status: Status };
 
@@ -48,6 +48,19 @@ const PROMOS: Promo[] = [
   { icon: "sword", bg: "#C9742B", fg: "#F7E7A9", title: "ซื้อ 2 แถม 1", desc: "เติมแพ็กเกจ 330 เพชร 2 ครั้ง แถมอีก 1 ครั้ง", code: "", end: "31/12/69", tag: "ของแถม" },
   { icon: "car", bg: "#2E9E6B", fg: "#fff", title: "เติมครั้งแรกบนคอนโซล", desc: "รับของสมนาคุณพิเศษในเกม", code: "", end: "15/12/69", tag: "ของแถม" },
 ];
+const CONTACTS = [
+  { icon: "chat", bg: "#2E9E6B", label: "LINE Official", value: "@topup-demo" },
+  { icon: "phone", bg: "#6D4AE0", label: "โทรศัพท์", value: "02-000-0000" },
+  { icon: "mail", bg: "#C9742B", label: "อีเมล", value: "support@example.com" },
+];
+const FAQS: [string, string][] = [
+  ["เติมเกมแล้วยังไม่ได้รับของ ทำอย่างไร?", "ปกติระบบเติมให้ภายใน 5 นาที หากเกินนั้น ให้ตรวจ UID และเซิร์ฟเวอร์ในหน้าคำสั่งซื้ออีกครั้ง แล้วแจ้งเราพร้อมเลขที่คำสั่งซื้อ"],
+  ["หา UID ผู้เล่นได้ที่ไหน?", "เปิดเกม ไปที่เมนูโปรไฟล์หรือการตั้งค่าบัญชี จะมีไอดีผู้เล่นแสดงเป็นตัวเลข อาจใช้ปุ่มคัดลอกได้"],
+  ["ชำระเงินแล้วขอยกเลิกได้ไหม?", "สินค้าดิจิทัลเมื่อเติมสำเร็จแล้วไม่สามารถยกเลิกได้ แต่หากตัดเงินแล้วไม่ได้รับของ ติดต่อเราเพื่อตรวจสอบและคืนเงินได้"],
+  ["รองรับการชำระเงินแบบไหนบ้าง?", "พร้อมเพย์ QR, บัตรเครดิต/เดบิต, TrueMoney Wallet และโอนผ่านแอปธนาคาร"],
+  ["ใช้โค้ดส่วนลดอย่างไร?", "ไปที่แท็บโปรโมชัน กดเก็บโค้ด จากนั้นไปหน้าชำระเงินแล้วกด ใช้โค้ด ยอดชำระจะลดลงทันที"],
+];
+const HELP_TOPICS = ["ไม่ได้รับของหลังเติม", "ปัญหาการชำระเงิน", "โค้ดส่วนลดใช้ไม่ได้", "อื่นๆ"];
 const PROMO_FILTERS = ["ทั้งหมด", "ลดราคา", "โบนัส", "ของแถม"];
 const COUPONS: Record<string, number> = { WELCOME10: 0.1 };
 const FILTERS: [Platform | "all", string][] = [["all", "ทั้งหมด"], ["mobile", "มือถือ"], ["pc", "พีซี"], ["console", "คอนโซล"]];
@@ -65,6 +78,9 @@ const GLYPH: Record<string, ReactNode> = {
   card: (<><path d="M5 10h38v28H5z" /><path d="M5 18h38" stroke="#0B0814" strokeWidth="5" /></>),
   wallet: (<><path d="M6 12h34v26H6z" /><circle cx="34" cy="25" r="4" fill="#0B0814" /></>),
   bank: <path d="M24 5l19 10H5zM9 19h6v16H9zM21 19h6v16h-6zM33 19h6v16h-6zM5 38h38v5H5z" />,
+  chat: <path d="M6 8h36v24H20l-10 9v-9H6z" />,
+  phone: <path d="M12 6h8l3 10-5 3c2 5 6 9 11 11l3-5 10 3v8c0 2-2 4-4 4C22 40 8 26 8 10c0-2 2-4 4-4z" />,
+  mail: (<><path d="M5 10h38v28H5z" /><path d="M5 12l19 15 19-15" fill="none" stroke="#0B0814" strokeWidth="3" /></>),
 };
 
 function Glyph({ k, fill, size }: { k: string; fill: string; size: number }) {
@@ -110,6 +126,9 @@ export default function Page() {
   const [promoFilter, setPromoFilter] = useState("ทั้งหมด");
   const [notif, setNotif] = useState(true);
   const [lastUid, setLastUid] = useState("");
+  const [faqOpen, setFaqOpen] = useState(-1);
+  const [helpTopic, setHelpTopic] = useState("");
+  const [helpMsg, setHelpMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "error" | "ok" | "info" } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -164,6 +183,16 @@ export default function Page() {
 
   const soon = (n: string) => say(`${n}: เร็วๆ นี้`, "info");
   const promos = PROMOS.filter((x) => promoFilter === "ทั้งหมด" || x.tag === promoFilter);
+  const copy = (v: string) => {
+    if (!navigator.clipboard) return say("คัดลอกไม่ได้ กรุณาพิมพ์ตามเอง", "info");
+    navigator.clipboard.writeText(v).then(() => say(`คัดลอก ${v} แล้ว`, "ok"), () => say("คัดลอกไม่ได้ กรุณาพิมพ์ตามเอง", "info"));
+  };
+  const sendHelp = () => {
+    if (!helpTopic) return say("กรุณาเลือกหัวข้อปัญหา");
+    if (helpMsg.trim().length < 10) return say("กรุณาอธิบายปัญหาอย่างน้อย 10 ตัวอักษร");
+    setHelpTopic(""); setHelpMsg("");
+    say("ส่งเรื่องแล้ว เราจะตอบกลับภายใน 24 ชั่วโมง", "ok");
+  };
   const shown = orders.filter((o) => ordFilter === "all" || o.status === ordFilter);
 
   const Nav = ({ active }: { active: number }) => (
@@ -322,6 +351,45 @@ export default function Page() {
           </>
         )}
 
+        {/* 8) ช่วยเหลือและติดต่อเรา */}
+        {screen === "help" && (
+          <div className="h-full overflow-y-auto px-4 pb-8">
+            <Back to="profile" title="ช่วยเหลือและติดต่อเรา" />
+            <h2 className="mb-2 font-bold">ติดต่อเรา</h2>
+            <div className={`${cardC} px-3`}>
+              {CONTACTS.map((c) => (
+                <div key={c.value} className="flex items-center gap-3 border-b border-[#3B3254] py-3 last:border-0">
+                  <Icon k={c.icon} bg={c.bg} size={40} radius={12} />
+                  <div className="flex-1"><div className="text-xs text-[#B9B0D6]">{c.label}</div><b>{c.value}</b></div>
+                  <button onClick={() => copy(c.value)} className="h-9 rounded-2xl border border-[#3B3254] bg-[#241B3D] px-3 text-xs font-bold">คัดลอก</button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-[#B9B0D6]">เวลาทำการ 09:00–21:00 ทุกวัน</p>
+            <h2 className="mb-2 mt-5 font-bold">คำถามที่พบบ่อย</h2>
+            <div className={`${cardC} px-3`}>
+              {FAQS.map(([q, a], i) => (
+                <div key={q} className="border-b border-[#3B3254] last:border-0">
+                  <button aria-expanded={faqOpen === i} onClick={() => setFaqOpen(faqOpen === i ? -1 : i)} className="flex w-full items-center justify-between gap-3 py-3 text-left">
+                    <span className="font-semibold">{q}</span>
+                    <span className="text-[#E8C872]" aria-hidden="true">{faqOpen === i ? "−" : "+"}</span>
+                  </button>
+                  {faqOpen === i && <p className="pb-3 text-sm text-white/80">{a}</p>}
+                </div>
+              ))}
+            </div>
+            <h2 className="mb-2 mt-5 font-bold">แจ้งปัญหา</h2>
+            <div className="flex flex-col gap-2">
+              <select className={`${inputC} [color-scheme:dark]`} value={helpTopic} onChange={(e) => setHelpTopic(e.target.value)} aria-label="หัวข้อปัญหา">
+                <option value="">เลือกหัวข้อปัญหา</option>
+                {HELP_TOPICS.map((t) => <option key={t}>{t}</option>)}
+              </select>
+              <textarea rows={4} value={helpMsg} onChange={(e) => setHelpMsg(e.target.value)} aria-label="รายละเอียดปัญหา" placeholder="อธิบายปัญหาที่พบ (ใส่เลขที่คำสั่งซื้อถ้ามี)" className="w-full rounded-xl border-2 border-[#3B3254] bg-[#171127] p-3 text-base text-white outline-none placeholder:text-white/50 focus:border-[#E8C872]" />
+              <button className={`${btnY} !h-[52px]`} onClick={sendHelp}>ส่งเรื่อง</button>
+            </div>
+          </div>
+        )}
+
         {/* 7) บัญชี */}
         {screen === "profile" && (
           <>
@@ -349,7 +417,7 @@ export default function Page() {
                     <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all ${notif ? "left-[22px]" : "left-0.5"}`} />
                   </button>
                 </div>
-                <MenuRow k="shield" bg="#2E9E6B" title="ช่วยเหลือและติดต่อเรา" onClick={() => soon("ช่วยเหลือ")} />
+                <MenuRow k="shield" bg="#2E9E6B" title="ช่วยเหลือและติดต่อเรา" onClick={() => setScreen("help")} />
               </div>
               <button className={`${btnO} mt-4 !h-[52px]`} onClick={() => soon("ออกจากระบบ")}>ออกจากระบบ</button>
             </div>
