@@ -9,7 +9,7 @@ const noto = Noto_Sans_Thai({ subsets: ["thai", "latin"], weight: ["400", "700"]
 type Platform = "mobile" | "pc" | "console";
 type Game = { id: string; name: string; platform: Platform; icon: string; bg: string; fg: string };
 type Pkg = { id: string; amount: string; price: number; hot?: boolean };
-type Screen = "home" | "pkg" | "pay" | "done" | "orders";
+type Screen = "home" | "pkg" | "pay" | "done" | "orders" | "promos";
 type Status = "processing" | "success";
 type Order = { id: string; time: string; gameId: string; game: string; amount: string; uid: string; pay: string; total: number; status: Status };
 
@@ -40,6 +40,14 @@ const SEED: Order[] = [
   { id: "TP2611172105", time: "17/11/69 21:05", gameId: "a", game: "เกม A", amount: "660 เพชร", uid: "123456789", pay: "promptpay", total: 299, status: "success" },
   { id: "TP2611151830", time: "15/11/69 18:30", gameId: "b", game: "เกม B", amount: "330 เพชร", uid: "987654321", pay: "wallet", total: 149, status: "success" },
 ];
+type Promo = { icon: string; bg: string; fg: string; title: string; desc: string; code: string; end: string; tag: string };
+const PROMOS: Promo[] = [
+  { icon: "star", bg: "#FF2E93", fg: "#fff", title: "ลูกค้าใหม่ลด 10%", desc: "ใช้ได้กับทุกเกม ทุกแพ็กเกจ", code: "WELCOME10", end: "30/11/69", tag: "ลดราคา" },
+  { icon: "gem", bg: "#7C4DFF", fg: "#FFD600", title: "โบนัสเพชร +20%", desc: "เติมครบ ฿299 ขึ้นไป รับเพชรเพิ่มอัตโนมัติ", code: "", end: "25/11/69", tag: "โบนัส" },
+  { icon: "sword", bg: "#FF6D00", fg: "#FFF176", title: "ซื้อ 2 แถม 1", desc: "เติมแพ็กเกจ 330 เพชร 2 ครั้ง แถมอีก 1 ครั้ง", code: "", end: "31/12/69", tag: "ของแถม" },
+  { icon: "car", bg: "#00C853", fg: "#fff", title: "เติมครั้งแรกบนคอนโซล", desc: "รับของสมนาคุณพิเศษในเกม", code: "", end: "15/12/69", tag: "ของแถม" },
+];
+const PROMO_FILTERS = ["ทั้งหมด", "ลดราคา", "โบนัส", "ของแถม"];
 const COUPONS: Record<string, number> = { WELCOME10: 0.1 };
 const FILTERS: [Platform | "all", string][] = [["all", "ทั้งหมด"], ["mobile", "มือถือ"], ["pc", "พีซี"], ["console", "คอนโซล"]];
 
@@ -97,6 +105,8 @@ export default function Page() {
   const [orders, setOrders] = useState<Order[]>(SEED);
   const [ordFilter, setOrdFilter] = useState<"all" | Status>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [savedCode, setSavedCode] = useState("");
+  const [promoFilter, setPromoFilter] = useState("ทั้งหมด");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "error" | "ok" | "info" } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,6 +129,7 @@ export default function Page() {
   function toPay() {
     if (!/^\d{5,15}$/.test(uid)) return say("กรุณากรอก UID เป็นตัวเลข 5–15 หลัก");
     if (!server) return say("กรุณาเลือกเซิร์ฟเวอร์");
+    if (savedCode && !coupon) setCoupon(savedCode);
     setScreen("pay");
   }
 
@@ -148,12 +159,13 @@ export default function Page() {
   }
 
   const soon = (n: string) => say(`${n}: เร็วๆ นี้`, "info");
+  const promos = PROMOS.filter((x) => promoFilter === "ทั้งหมด" || x.tag === promoFilter);
   const shown = orders.filter((o) => ordFilter === "all" || o.status === ordFilter);
 
   const Nav = ({ active }: { active: number }) => (
     <nav className="absolute inset-x-0 bottom-0 flex h-[68px] items-center justify-around border-t border-[#3B2480] bg-[#1E0E45] text-[11px]">
       {([["หน้าแรก", "crown"], ["คำสั่งซื้อ", "cart"], ["โปรโมชัน", "star"], ["บัญชี", "shield"]] as const).map(([n, k], i) => (
-        <button key={n} onClick={() => (i === 0 ? reset() : i === 1 ? setScreen("orders") : soon(n))} className={`flex flex-col items-center gap-1 ${i === active ? "font-bold text-[#FFD600]" : "text-[#C4B5FD]"}`}>
+        <button key={n} onClick={() => (i === 0 ? reset() : i === 1 ? setScreen("orders") : i === 2 ? setScreen("promos") : soon(n))} className={`flex flex-col items-center gap-1 ${i === active ? "font-bold text-[#FFD600]" : "text-[#C4B5FD]"}`}>
           <Glyph k={k} fill="currentColor" size={24} />{n}
         </button>
       ))}
@@ -295,6 +307,43 @@ export default function Page() {
             <Footer>
               <button className={btnY} disabled={busy} onClick={submit}>{busy ? "กำลังดำเนินการ…" : `ชำระเงิน ${baht(total)}`}</button>
             </Footer>
+          </>
+        )}
+
+        {/* 6) โปรโมชัน */}
+        {screen === "promos" && (
+          <>
+            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
+              <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">โปรโมชัน</h1></div>
+              <div className="relative mb-4 flex h-[110px] items-center overflow-hidden rounded-3xl bg-[#6C2BFF] px-5">
+                <div className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-[#FF2E93]" />
+                <svg className="absolute right-5 top-4" width="78" height="78" viewBox="0 0 48 48" fill="#FFD600" aria-hidden="true">{GLYPH.gem}</svg>
+                <div className="relative w-48"><b className="text-xl leading-tight">โปรโมชันสุดคุ้ม</b><div className="mt-1 text-xs">เก็บโค้ดไว้ใช้ตอนชำระเงิน</div></div>
+              </div>
+              <div className="mb-4 flex gap-2 overflow-x-auto">
+                {PROMO_FILTERS.map((k) => (
+                  <button key={k} onClick={() => setPromoFilter(k)} className={`h-9 shrink-0 rounded-full px-4 text-[13px] ${promoFilter === k ? "bg-[#FFD600] font-bold text-[#14082E]" : "bg-[#2F1A6B] text-[#E9E1FF]"}`}>{k}</button>
+                ))}
+              </div>
+              {promos.map((x) => (
+                <div key={x.title} className={`${cardC} mb-3 p-3`}>
+                  <div className="flex items-center gap-3">
+                    <Icon k={x.icon} bg={x.bg} fg={x.fg} size={48} radius={12} />
+                    <div className="flex-1"><b>{x.title}</b><div className="text-xs text-[#C4B5FD]">{x.desc}</div></div>
+                    <span className="rounded-full bg-[#FF2E93] px-2.5 py-0.5 text-xs font-bold">{x.tag}</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-[#3B2480] pt-3 text-xs">
+                    <span className="text-[#C4B5FD]">หมดเขต {x.end}</span>
+                    {x.code ? (
+                      savedCode === x.code
+                        ? <span className="font-bold text-[#00E676]">เก็บแล้ว · {x.code}</span>
+                        : <button className="h-9 rounded-2xl bg-[#FFD600] px-3 text-sm font-bold text-[#14082E]" onClick={() => { setSavedCode(x.code); say(`เก็บโค้ด ${x.code} แล้ว ใช้ได้ตอนชำระเงิน`, "ok"); }}>เก็บโค้ด {x.code}</button>
+                    ) : <span className="text-[#00E5FF]">ใช้อัตโนมัติ</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Nav active={2} />
           </>
         )}
 
