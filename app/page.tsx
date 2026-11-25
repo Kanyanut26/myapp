@@ -1,567 +1,852 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
-import { Noto_Sans_Thai, Noto_Serif_Thai } from "next/font/google";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const noto = Noto_Sans_Thai({ subsets: ["thai", "latin"], weight: ["400", "700"] });
-const serif = Noto_Serif_Thai({ subsets: ["thai", "latin"], weight: ["600", "700"], variable: "--font-serif" });
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
-/* ---------- ข้อมูลตัวอย่าง ---------- */
-type Platform = "mobile" | "pc" | "console";
-type Game = { id: string; name: string; platform: Platform; icon: string; bg: string; fg: string };
-type Pkg = { id: string; amount: string; price: number; hot?: boolean };
-type Screen = "home" | "pkg" | "pay" | "done" | "orders" | "promos" | "profile" | "help";
-type Status = "processing" | "success";
-type Order = { id: string; time: string; gameId: string; game: string; amount: string; uid: string; pay: string; total: number; status: Status };
+const pad = (n: number, l = 2) => String(n).padStart(l, "0");
 
-const GAMES: Game[] = [
-  { id: "a", name: "เกม A", platform: "mobile", icon: "gem", bg: "#4A4A52", fg: "#E8C872" },
-  { id: "b", name: "เกม B", platform: "mobile", icon: "sword", bg: "#9A6724", fg: "#FFFFFF" },
-  { id: "c", name: "เกม C", platform: "pc", icon: "crown", bg: "#8A6A2F", fg: "#F7E7A9" },
-  { id: "d", name: "เกม D", platform: "pc", icon: "shield", bg: "#5B6B7A", fg: "#FFFFFF" },
-  { id: "e", name: "เกม E", platform: "console", icon: "car", bg: "#5F7A6A", fg: "#FFFFFF" },
-  { id: "f", name: "เกม F", platform: "console", icon: "star", bg: "#6E6E78", fg: "#F7E7A9" },
-];
-const PACKAGES: Pkg[] = [
-  { id: "p1", amount: "60 เพชร", price: 29 },
-  { id: "p2", amount: "330 เพชร", price: 149, hot: true },
-  { id: "p3", amount: "660 เพชร", price: 299 },
-  { id: "p4", amount: "1,980 เพชร", price: 899 },
-  { id: "p5", amount: "3,960 เพชร", price: 1790 },
-  { id: "p6", amount: "8,100 เพชร", price: 3590 },
-];
-const SERVERS = ["เอเชีย", "ยุโรป", "อเมริกา"];
-const PAYS = [
-  { id: "promptpay", name: "พร้อมเพย์ QR", icon: "qr", bg: "#4F6D8A" },
-  { id: "card", name: "บัตรเครดิต / เดบิต", icon: "card", bg: "#8A6A2F" },
-  { id: "wallet", name: "TrueMoney Wallet", icon: "wallet", bg: "#9A6724" },
-  { id: "bank", name: "โอนผ่านแอปธนาคาร", icon: "bank", bg: "#5F7A6A" },
-];
-const SEED: Order[] = [
-  { id: "TP2611172105", time: "17/11/69 21:05", gameId: "a", game: "เกม A", amount: "660 เพชร", uid: "123456789", pay: "promptpay", total: 299, status: "success" },
-  { id: "TP2611151830", time: "15/11/69 18:30", gameId: "b", game: "เกม B", amount: "330 เพชร", uid: "987654321", pay: "wallet", total: 149, status: "success" },
-];
-type Promo = { icon: string; bg: string; fg: string; title: string; desc: string; code: string; end: string; tag: string };
-const PROMOS: Promo[] = [
-  { icon: "star", bg: "#9A6724", fg: "#fff", title: "ลูกค้าใหม่ลด 10%", desc: "ใช้ได้กับทุกเกม ทุกแพ็กเกจ", code: "WELCOME10", end: "30/11/69", tag: "ลดราคา" },
-  { icon: "gem", bg: "#4A4A52", fg: "#E8C872", title: "โบนัสเพชร +20%", desc: "เติมครบ ฿299 ขึ้นไป รับเพชรเพิ่มอัตโนมัติ", code: "", end: "25/11/69", tag: "โบนัส" },
-  { icon: "sword", bg: "#8A6A2F", fg: "#F7E7A9", title: "ซื้อ 2 แถม 1", desc: "เติมแพ็กเกจ 330 เพชร 2 ครั้ง แถมอีก 1 ครั้ง", code: "", end: "31/12/69", tag: "ของแถม" },
-  { icon: "car", bg: "#5F7A6A", fg: "#fff", title: "เติมครั้งแรกบนคอนโซล", desc: "รับของสมนาคุณพิเศษในเกม", code: "", end: "15/12/69", tag: "ของแถม" },
-];
-const CONTACTS = [
-  { icon: "chat", bg: "#5F7A6A", label: "LINE Official", value: "@topup-demo" },
-  { icon: "phone", bg: "#4A4A52", label: "โทรศัพท์", value: "02-000-0000" },
-  { icon: "mail", bg: "#8A6A2F", label: "อีเมล", value: "support@example.com" },
-];
-const FAQS: [string, string][] = [
-  ["เติมเกมแล้วยังไม่ได้รับของ ทำอย่างไร?", "ปกติระบบเติมให้ภายใน 5 นาที หากเกินนั้น ให้ตรวจ UID และเซิร์ฟเวอร์ในหน้าคำสั่งซื้ออีกครั้ง แล้วแจ้งเราพร้อมเลขที่คำสั่งซื้อ"],
-  ["หา UID ผู้เล่นได้ที่ไหน?", "เปิดเกม ไปที่เมนูโปรไฟล์หรือการตั้งค่าบัญชี จะมีไอดีผู้เล่นแสดงเป็นตัวเลข อาจใช้ปุ่มคัดลอกได้"],
-  ["ชำระเงินแล้วขอยกเลิกได้ไหม?", "สินค้าดิจิทัลเมื่อเติมสำเร็จแล้วไม่สามารถยกเลิกได้ แต่หากตัดเงินแล้วไม่ได้รับของ ติดต่อเราเพื่อตรวจสอบและคืนเงินได้"],
-  ["รองรับการชำระเงินแบบไหนบ้าง?", "พร้อมเพย์ QR, บัตรเครดิต/เดบิต, TrueMoney Wallet และโอนผ่านแอปธนาคาร"],
-  ["ใช้โค้ดส่วนลดอย่างไร?", "ไปที่แท็บโปรโมชัน กดเก็บโค้ด จากนั้นไปหน้าชำระเงินแล้วกด ใช้โค้ด ยอดชำระจะลดลงทันที"],
-];
-const HELP_TOPICS = ["ไม่ได้รับของหลังเติม", "ปัญหาการชำระเงิน", "โค้ดส่วนลดใช้ไม่ได้", "อื่นๆ"];
-const PROMO_FILTERS = ["ทั้งหมด", "ลดราคา", "โบนัส", "ของแถม"];
-const COUPONS: Record<string, number> = { WELCOME10: 0.1 };
-const FILTERS: [Platform | "all", string][] = [["all", "ทั้งหมด"], ["mobile", "มือถือ"], ["pc", "พีซี"], ["console", "คอนโซล"]];
+const TABS = [
+  { id: "time", label: "เวลา" },
+  { id: "football", label: "ผลบอล" },
+  { id: "stopwatch", label: "จับเวลา" },
+  { id: "alarm", label: "นาฬิกาปลุก" },
+  { id: "calendar", label: "ปฏิทิน" },
+  { id: "weather", label: "อากาศ" },
+  { id: "stock", label: "กราฟหุ้น" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
-/* ---------- ไอคอน SVG ---------- */
-const GLYPH: Record<string, ReactNode> = {
-  gem: (<><path d="M24 6l15 11-15 25L9 17z" /><path d="M9 17h30M24 6l-6 11 6 25 6-25z" fill="none" stroke="#fff" strokeOpacity=".6" strokeWidth="2" /></>),
-  sword: <path d="M36 6l6 6-20 20-6-6zM12 30l6 6-4 4-6-2-2-6z" />,
-  crown: (<><path d="M7 34V15l9 9 8-14 8 14 9-9v19z" /><rect x="7" y="37" width="34" height="4" rx="2" /></>),
-  shield: (<><path d="M24 5l15 5v13c0 10-6 17-15 20C15 40 9 33 9 23V10z" /><path d="M24 14v20" stroke="#fff" strokeOpacity=".6" strokeWidth="3" /></>),
-  star: <path d="M24 5l5.5 12 13 1.5-9.7 8.8 2.8 12.8L24 33l-11.6 7.1 2.8-12.8L5.5 18.5l13-1.5z" />,
-  car: (<><path d="M6 28l5-11h26l5 11v8H6z" /><circle cx="14" cy="37" r="5" stroke="#fff" strokeOpacity=".7" strokeWidth="2" /><circle cx="34" cy="37" r="5" stroke="#fff" strokeOpacity=".7" strokeWidth="2" /></>),
-  cart: (<><path d="M6 8h6l4 20h20l4-14H14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" /><circle cx="19" cy="37" r="3" /><circle cx="34" cy="37" r="3" /></>),
-  qr: <path d="M6 6h14v14H6zM28 6h14v14H28zM6 28h14v14H6zM28 28h6v6h-6zM36 36h6v6h-6z" />,
-  card: (<><path d="M5 10h38v28H5z" /><path d="M5 18h38" stroke="#0F0F11" strokeWidth="5" /></>),
-  wallet: (<><path d="M6 12h34v26H6z" /><circle cx="34" cy="25" r="4" fill="#0F0F11" /></>),
-  bank: <path d="M24 5l19 10H5zM9 19h6v16H9zM21 19h6v16h-6zM33 19h6v16h-6zM5 38h38v5H5z" />,
-  chat: <path d="M6 8h36v24H20l-10 9v-9H6z" />,
-  phone: <path d="M12 6h8l3 10-5 3c2 5 6 9 11 11l3-5 10 3v8c0 2-2 4-4 4C22 40 8 26 8 10c0-2 2-4 4-4z" />,
-  mail: (<><path d="M5 10h38v28H5z" /><path d="M5 12l19 15 19-15" fill="none" stroke="#0F0F11" strokeWidth="3" /></>),
-};
+function useNow(interval = 1000) {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), interval);
+    return () => clearInterval(t);
+  }, [interval]);
+  return now;
+}
 
-const RICH: Record<string, ReactNode> = {
-  gem: (<><path d="M9 17L16 7H32L39 17L24 43Z" fill="url(#gGold)"/><path d="M16 7H32L28 17H20Z" fill="#fff" fillOpacity=".5"/><path d="M9 17H20L24 43Z" fill="#000" fillOpacity=".18"/><path d="M39 17H28L24 43Z" fill="#fff" fillOpacity=".14"/><path d="M9 17H39" stroke="#fff" strokeOpacity=".55" strokeWidth="1.2"/></>),
-  sword: (<><path d="M38 5l5 5-21 21-5-5z" fill="url(#gSilver)"/><path d="M40.5 7.5L19.5 28.5" stroke="#fff" strokeOpacity=".55" strokeWidth="1"/><path d="M38 5l5 5-1.6 1.6-5-5z" fill="#fff" fillOpacity=".6"/><path d="M13.3 24.8L15.8 22.3L25.7 32.2L23.2 34.7z" fill="url(#gGold)"/><path d="M17.3 29.1L19 30.8L14 35.8L12.3 34.1z" fill="url(#gBronze)"/><circle cx="11.7" cy="36.3" r="2.6" fill="url(#gGold)"/></>),
-  crown: (<><path d="M6 36V14l10 10 8-15 8 15 10-10v22z" fill="url(#gGold)"/><path d="M24 9l8 15 10-10v22H24z" fill="#000" fillOpacity=".14"/><rect x="6" y="36" width="36" height="5" rx="2" fill="url(#gBronze)"/><circle cx="6" cy="13" r="2.6" fill="#fff"/><circle cx="24" cy="8" r="2.8" fill="#fff"/><circle cx="42" cy="13" r="2.6" fill="#fff"/><circle cx="24" cy="38.5" r="1.8" fill="#fff" fillOpacity=".9"/></>),
-  shield: (<><path d="M24 4l16 5v14c0 10-7 17-16 21-9-4-16-11-16-21V9z" fill="url(#gSilver)"/><path d="M24 4l16 5v14c0 10-7 17-16 21z" fill="#000" fillOpacity=".12"/><path d="M24 9l11 3.5V23c0 7-5 12.5-11 15.5C18 35.5 13 30 13 23V12.5z" fill="#141417" fillOpacity=".88"/><path d="M24 15l6 13-6-3-6 3z" fill="url(#gGold)"/></>),
-  car: (<><path d="M5 30l4-11c1-2.5 3-3 5-3h20c2 0 4 .5 5 3l4 11v7H5z" fill="url(#gSilver)"/><path d="M12 19h24l2.5 7h-29z" fill="#141417" fillOpacity=".78"/><path d="M5 30h38v2H5z" fill="#fff" fillOpacity=".35"/><circle cx="14" cy="37" r="5" fill="#141417" stroke="url(#gGold)" strokeWidth="2"/><circle cx="34" cy="37" r="5" fill="#141417" stroke="url(#gGold)" strokeWidth="2"/><circle cx="14" cy="37" r="1.8" fill="url(#gGold)"/><circle cx="34" cy="37" r="1.8" fill="url(#gGold)"/><circle cx="9" cy="30" r="1.8" fill="url(#gGold)"/><circle cx="39" cy="30" r="1.8" fill="url(#gGold)"/></>),
-  star: (<><path d="M24 5l5.5 12 13 1.5-9.7 8.8 2.8 12.8L24 33l-11.6 7.1 2.8-12.8L5.5 18.5l13-1.5z" fill="url(#gGold)"/><path d="M24 5l5.5 12 13 1.5-9.7 8.8 2.8 12.8L24 33z" fill="#000" fillOpacity=".15"/><path d="M24 5l-5.5 12-13 1.5" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.2"/></>),
-};
-GLYPH.gem = RICH.gem;
+function useLocalStorage<T>(key: string, initial: T) {
+  const [value, setValue] = useState<T>(initial);
+  const loaded = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setValue(JSON.parse(raw));
+    } catch {}
+    loaded.current = true;
+  }, [key]);
+  useEffect(() => {
+    if (!loaded.current) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  }, [key, value]);
+  return [value, setValue] as const;
+}
 
-function Glyph({ k, fill, size }: { k: string; fill: string; size: number }) {
+const card = "rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-sky-100";
+const btn =
+  "rounded-xl px-4 py-2 text-sm font-medium transition active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500";
+const btnPrimary = `${btn} bg-sky-500 text-white hover:bg-sky-600`;
+const btnGhost = `${btn} bg-sky-50 text-sky-700 hover:bg-sky-100`;
+
+/* ------------------------------------------------------------------ */
+/*  1. Time                                                            */
+/* ------------------------------------------------------------------ */
+
+const ZONES = [
+  { name: "กรุงเทพ", tz: "Asia/Bangkok" },
+  { name: "โตเกียว", tz: "Asia/Tokyo" },
+  { name: "ลอนดอน", tz: "Europe/London" },
+  { name: "นิวยอร์ก", tz: "America/New_York" },
+];
+
+function AnalogClock({ now }: { now: Date }) {
+  const s = now.getSeconds();
+  const m = now.getMinutes() + s / 60;
+  const h = (now.getHours() % 12) + m / 60;
+  const hand = (deg: number, len: number, w: number, color: string) => (
+    <line
+      x1="100"
+      y1="100"
+      x2={100 + len * Math.sin((deg * Math.PI) / 180)}
+      y2={100 - len * Math.cos((deg * Math.PI) / 180)}
+      stroke={color}
+      strokeWidth={w}
+      strokeLinecap="round"
+    />
+  );
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill={fill} aria-hidden="true">
-      {GLYPH[k]}
+    <svg viewBox="0 0 200 200" className="mx-auto h-56 w-56" role="img" aria-label="นาฬิกาเข็ม">
+      <circle cx="100" cy="100" r="96" fill="#fff" stroke="#bae6fd" strokeWidth="4" />
+      {Array.from({ length: 60 }).map((_, i) => {
+        const a = (i * 6 * Math.PI) / 180;
+        const major = i % 5 === 0;
+        const r1 = major ? 82 : 88;
+        return (
+          <line
+            key={i}
+            x1={100 + r1 * Math.sin(a)}
+            y1={100 - r1 * Math.cos(a)}
+            x2={100 + 92 * Math.sin(a)}
+            y2={100 - 92 * Math.cos(a)}
+            stroke={major ? "#0369a1" : "#bae6fd"}
+            strokeWidth={major ? 2.5 : 1}
+          />
+        );
+      })}
+      {hand(h * 30, 50, 5, "#0c4a6e")}
+      {hand(m * 6, 72, 3.5, "#0369a1")}
+      {hand(s * 6, 80, 1.5, "#f43f5e")}
+      <circle cx="100" cy="100" r="5" fill="#f43f5e" />
     </svg>
   );
 }
 
-function Icon({ k, bg, fg = "#fff", size = 48, radius = 14 }: { k: string; bg: string; fg?: string; size?: number; radius?: number }) {
-  if (RICH[k]) {
-    return (
-      <div className="flex shrink-0 items-center justify-center" style={{ width: size, height: size, borderRadius: radius, background: `radial-gradient(circle at 30% 18%,rgba(255,255,255,.26),transparent 55%),linear-gradient(150deg,${bg},#141417)`, boxShadow: `inset 0 0 0 1px rgba(232,200,114,.45),0 8px 18px -10px ${bg}` }}>
-        <svg width={Math.round(size * 0.74)} height={Math.round(size * 0.74)} viewBox="0 0 48 48" aria-hidden="true" style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,.45))" }}>{RICH[k]}</svg>
-      </div>
-    );
-  }
+function TimeTab() {
+  const now = useNow();
+  if (!now) return null;
   return (
-    <div className="flex shrink-0 items-center justify-center" style={{ width: size, height: size, borderRadius: radius, background: `linear-gradient(145deg,rgba(255,255,255,.25),rgba(255,255,255,0) 55%),${bg}`, boxShadow: `inset 0 1px 0 rgba(255,255,255,.3),0 8px 18px -10px ${bg}` }}>
-      <Glyph k={k} fill={fg} size={Math.round(size * 0.72)} />
+    <div className="space-y-4">
+      <div className={`${card} text-center`}>
+        <AnalogClock now={now} />
+        <div className="mt-4 font-mono text-6xl font-semibold tabular-nums text-sky-900">
+          {pad(now.getHours())}:{pad(now.getMinutes())}
+          <span className="text-3xl text-sky-400">:{pad(now.getSeconds())}</span>
+        </div>
+        <p className="mt-2 text-sky-700">
+          {now.toLocaleDateString("th-TH", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {ZONES.map((z) => (
+          <div key={z.tz} className={card}>
+            <div className="text-sm text-sky-600">{z.name}</div>
+            <div className="font-mono text-2xl tabular-nums text-sky-900">
+              {now.toLocaleTimeString("th-TH", {
+                timeZone: z.tz,
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-/* ---------- คลาสที่ใช้ซ้ำ ---------- */
-const btnY = "h-[54px] w-full rounded-2xl bg-gradient-to-br from-[#F7E7A9] via-[#D4AF37] to-[#B8892B] text-base shadow-[0_6px_20px_-6px_rgba(212,175,55,.55)] font-bold text-[#0F0F11] transition active:scale-95 disabled:opacity-60";
-const btnO = "h-[54px] w-full rounded-2xl border-2 border-[#D4AF37]/70 text-base font-bold text-white transition active:scale-95";
-const inputC = "h-12 w-full rounded-xl border-2 border-[#3A3A41] bg-[#1A1A1E] px-3.5 text-base text-white outline-none placeholder:text-white/50 focus:border-[#E8C872]";
-const cardC = "rounded-2xl border-2 border-[#3A3A41] bg-[#1A1A1E] bg-gradient-to-br from-white/5 to-transparent";
-const baht = (n: number) => `฿ ${n.toLocaleString("th-TH")}`;
+/* ------------------------------------------------------------------ */
+/*  2. Football                                                        */
+/* ------------------------------------------------------------------ */
 
-/* ---------- หน้าหลัก ---------- */
-export default function Page() {
-  const [screen, setScreen] = useState<Screen>("home");
-  const [filter, setFilter] = useState<Platform | "all">("all");
-  const [q, setQ] = useState("");
-  const [game, setGame] = useState<Game>(GAMES[0]);
-  const [pkg, setPkg] = useState<Pkg>(PACKAGES[1]);
-  const [uid, setUid] = useState("");
-  const [server, setServer] = useState("");
-  const [pay, setPay] = useState("promptpay");
-  const [coupon, setCoupon] = useState("");
-  const [rate, setRate] = useState(0);
-  const [order, setOrder] = useState<Order | null>(null);
-  const [orders, setOrders] = useState<Order[]>(SEED);
-  const [ordFilter, setOrdFilter] = useState<"all" | Status>("all");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [savedCode, setSavedCode] = useState("");
-  const [promoFilter, setPromoFilter] = useState("ทั้งหมด");
-  const [notif, setNotif] = useState(true);
-  const [lastUid, setLastUid] = useState("");
-  const [faqOpen, setFaqOpen] = useState(-1);
-  const [helpTopic, setHelpTopic] = useState("");
-  const [helpMsg, setHelpMsg] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: "error" | "ok" | "info" } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+type Match = {
+  id: string;
+  date: string;
+  home: string;
+  away: string;
+  hs: number | null;
+  as: number | null;
+};
 
-  const total = Math.round(pkg.price * (1 - rate));
-  const games = GAMES.filter((g) => (filter === "all" || g.platform === filter) && g.name.toLowerCase().includes(q.trim().toLowerCase()));
+const LEAGUES = [
+  { id: "4328", name: "พรีเมียร์ลีก" },
+  { id: "4335", name: "ลาลิกา" },
+  { id: "4331", name: "บุนเดสลีกา" },
+  { id: "4332", name: "เซเรียอา" },
+];
 
-  function say(msg: string, type: "error" | "ok" | "info" = "error") {
-    setToast({ msg, type });
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToast(null), 2800);
-  }
+const MOCK_MATCHES: Match[] = [
+  { id: "1", date: "-", home: "ทีมเหย้า A", away: "ทีมเยือน B", hs: 2, as: 1 },
+  { id: "2", date: "-", home: "ทีมเหย้า C", away: "ทีมเยือน D", hs: 0, as: 0 },
+  { id: "3", date: "-", home: "ทีมเหย้า E", away: "ทีมเยือน F", hs: 3, as: 2 },
+];
 
-  function reset() {
-    setQ(""); setUid(""); setServer(""); setPay("promptpay"); setCoupon(""); setRate(0); setOrder(null); setBusy(false);
-    setPkg(PACKAGES[1]);
-    setScreen("home");
-  }
+function FootballTab() {
+  const [league, setLeague] = useState(LEAGUES[0].id);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
 
-  function toPay() {
-    if (!/^\d{5,15}$/.test(uid)) return say("กรุณากรอก UID เป็นตัวเลข 5–15 หลัก");
-    if (!server) return say("กรุณาเลือกเซิร์ฟเวอร์");
-    if (savedCode && !coupon) setCoupon(savedCode);
-    setScreen("pay");
-  }
+  const load = useCallback(async () => {
+    setState("loading");
+    try {
+      // TheSportsDB: ฟรี ใช้ key "3" สำหรับทดสอบ (ถ้าใช้จริงควรสมัคร key ของตัวเอง)
+      const res = await fetch(
+        `https://www.thesportsdb.com/api/v1/json/3/eventspastleague.php?id=${league}`
+      );
+      const json = await res.json();
+      const list: Match[] = (json.events ?? []).map((e: any) => ({
+        id: e.idEvent,
+        date: e.dateEvent,
+        home: e.strHomeTeam,
+        away: e.strAwayTeam,
+        hs: e.intHomeScore === null ? null : Number(e.intHomeScore),
+        as: e.intAwayScore === null ? null : Number(e.intAwayScore),
+      }));
+      if (!list.length) throw new Error("empty");
+      setMatches(list.reverse());
+      setState("ok");
+    } catch {
+      setMatches(MOCK_MATCHES);
+      setState("error");
+    }
+  }, [league]);
 
-  function applyCoupon() {
-    const code = coupon.trim().toUpperCase();
-    if (!code) { setRate(0); return; }
-    const r = COUPONS[code];
-    setRate(r ?? 0);
-    say(r ? `ใช้โค้ดสำเร็จ ลด ${Math.round(r * 100)}%` : "โค้ดไม่ถูกต้อง", r ? "ok" : "error");
-  }
-
-  async function submit() {
-    if (busy) return;
-    setBusy(true);
-    // TODO: เรียก API จริง เช่น fetch("/api/orders", { method: "POST", body: JSON.stringify({...}) })
-    await new Promise((r) => setTimeout(r, 900));
-    const placed: Order = {
-      id: `TP${Date.now().toString().slice(-10)}`,
-      time: new Date().toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }),
-      gameId: game.id, game: game.name, amount: pkg.amount, uid, pay, total, status: "processing",
-    };
-    setOrder(placed);
-    setLastUid(uid);
-    setOrders((prev) => [placed, ...prev]);
-    setTimeout(() => setOrders((prev) => prev.map((o) => (o.id === placed.id ? { ...o, status: "success" } : o))), 6000);
-    setBusy(false);
-    setScreen("done");
-  }
-
-  const soon = (n: string) => say(`${n}: เร็วๆ นี้`, "info");
-  const promos = PROMOS.filter((x) => promoFilter === "ทั้งหมด" || x.tag === promoFilter);
-  const copy = (v: string) => {
-    if (!navigator.clipboard) return say("คัดลอกไม่ได้ กรุณาพิมพ์ตามเอง", "info");
-    navigator.clipboard.writeText(v).then(() => say(`คัดลอก ${v} แล้ว`, "ok"), () => say("คัดลอกไม่ได้ กรุณาพิมพ์ตามเอง", "info"));
-  };
-  const sendHelp = () => {
-    if (!helpTopic) return say("กรุณาเลือกหัวข้อปัญหา");
-    if (helpMsg.trim().length < 10) return say("กรุณาอธิบายปัญหาอย่างน้อย 10 ตัวอักษร");
-    setHelpTopic(""); setHelpMsg("");
-    say("ส่งเรื่องแล้ว เราจะตอบกลับภายใน 24 ชั่วโมง", "ok");
-  };
-  const shown = orders.filter((o) => ordFilter === "all" || o.status === ordFilter);
-
-  const Nav = ({ active }: { active: number }) => (
-    <nav className="absolute inset-x-0 bottom-0 flex h-[68px] items-center justify-around border-t border-[#3A3A41] bg-[#141417]/80 text-[11px] backdrop-blur-xl">
-      {([["หน้าแรก", "crown"], ["คำสั่งซื้อ", "cart"], ["โปรโมชัน", "star"], ["บัญชี", "shield"]] as const).map(([n, k], i) => (
-        <button key={n} onClick={() => (i === 0 ? reset() : i === 1 ? setScreen("orders") : i === 2 ? setScreen("promos") : setScreen("profile"))} className={`flex flex-col items-center gap-1 ${i === active ? "font-bold text-[#E8C872]" : "text-[#B5B3BC]"}`}>
-          <Glyph k={k} fill="currentColor" size={24} />{n}
-        </button>
-      ))}
-    </nav>
-  );
-
-  const MenuRow = ({ k, bg, title, sub, onClick }: { k: string; bg: string; title: string; sub?: string; onClick: () => void }) => (
-    <button onClick={onClick} className="flex w-full items-center gap-3 border-b border-[#3A3A41] py-3 text-left last:border-0">
-      <Icon k={k} bg={bg} size={36} radius={10} />
-      <div className="flex-1"><div>{title}</div>{sub && <div className="text-xs text-[#B5B3BC]">{sub}</div>}</div>
-      <span className="text-[#B5B3BC]" aria-hidden="true">›</span>
-    </button>
-  );
-
-  const Back = ({ to, title }: { to: Screen; title: string }) => (
-    <div className="flex h-[60px] items-center">
-      <button className="h-11 px-2 text-[15px] text-[#E8C872]" onClick={() => setScreen(to)}>‹ ย้อนกลับ</button>
-      <h1 className="flex-1 pr-16 text-center font-bold">{title}</h1>
-    </div>
-  );
-
-  const Footer = ({ children }: { children: ReactNode }) => (
-    <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 border-t border-[#3A3A41] bg-[#141417]/80 px-4 pb-6 pt-3 backdrop-blur-xl">{children}</div>
-  );
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
-    <main className={`${noto.className} ${serif.variable} flex min-h-dvh justify-center bg-[#050506] [&_h1]:font-[family-name:var(--font-serif)] [&_h2]:font-[family-name:var(--font-serif)] [&_h1]:bg-gradient-to-r [&_h1]:from-[#F7E7A9] [&_h1]:to-[#D4AF37] [&_h1]:bg-clip-text [&_h1]:text-transparent [&_h2]:text-[#F1DDA0]`}>
-      <div className="relative h-dvh w-full max-w-[390px] overflow-hidden bg-[radial-gradient(120%_55%_at_50%_-8%,#2B1B5E_0%,#0B0814_62%)] text-white sm:my-4 sm:h-[882px] sm:rounded-[28px] sm:shadow-[0_30px_80px_rgba(0,0,0,.6)] sm:ring-1 sm:ring-[#D4AF37]/45">
-        {toast && (
-          <div role="status" className={`absolute left-1/2 top-3 z-50 w-[90%] -translate-x-1/2 rounded-xl px-4 py-3 text-sm shadow-lg ${toast.type === "error" ? "bg-red-500 text-white" : "bg-[#E8C872] text-[#0F0F11]"}`}>
-            {toast.msg}
-          </div>
-        )}
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {LEAGUES.map((l) => (
+          <button
+            key={l.id}
+            onClick={() => setLeague(l.id)}
+            className={league === l.id ? btnPrimary : btnGhost}
+          >
+            {l.name}
+          </button>
+        ))}
+      </div>
 
-        <svg width="0" height="0" className="absolute" aria-hidden="true"><defs><linearGradient id="gGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFF3C4"/><stop offset=".5" stopColor="#E8C872"/><stop offset="1" stopColor="#B8892B"/></linearGradient><linearGradient id="gSilver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FAFAFC"/><stop offset=".55" stopColor="#B5B3BC"/><stop offset="1" stopColor="#6E6E78"/></linearGradient><linearGradient id="gBronze" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#E2B66B"/><stop offset=".6" stopColor="#9A6724"/><stop offset="1" stopColor="#6B4415"/></linearGradient></defs></svg>
-        <style>{`@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){*{animation:none!important}}`}</style>
-        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[radial-gradient(circle,rgba(212,175,55,.2),transparent_65%)]" />
-        <div className="pointer-events-none absolute -left-20 bottom-14 h-64 w-64 rounded-full bg-[radial-gradient(circle,rgba(190,190,200,.09),transparent_65%)]" />
-        <div key={screen} className="relative h-full animate-[rise_.38s_ease-out_both]">
-        {/* 1) หน้าแรก */}
-        {screen === "home" && (
-          <>
-            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
-              <div className="flex items-center py-4">
-                <h1 className="flex-1 text-2xl font-bold">เติมเกม</h1>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9A6724]"><Glyph k="cart" fill="#fff" size={22} /></div>
-              </div>
-              <input className={inputC} value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาเกมที่ต้องการเติม" aria-label="ค้นหาเกม" />
+      {state === "error" && (
+        <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+          โหลดผลบอลไม่สำเร็จ กำลังแสดงข้อมูลตัวอย่าง{" "}
+          <button className="underline" onClick={load}>
+            ลองอีกครั้ง
+          </button>
+        </p>
+      )}
+      {state === "loading" && <p className="text-sky-600">กำลังโหลดผลบอล…</p>}
 
-              <div className="relative mt-4 flex h-[150px] items-center overflow-hidden rounded-3xl bg-gradient-to-br from-[#44444C] to-[#1F1F24] px-5">
-                <div className="absolute -right-8 -top-10 h-44 w-44 rounded-full bg-[#9A6724]" />
-                <div className="absolute -bottom-12 right-12 h-28 w-28 rounded-full bg-[#E8C872]" />
-                <svg className="absolute right-4 top-6 drop-shadow-[0_8px_24px_rgba(232,200,114,.5)]" width="104" height="104" viewBox="0 0 48 48" fill="#E8C872" aria-hidden="true">{GLYPH.gem}</svg>
-                <svg className="absolute right-[118px] top-3 opacity-90" width="14" height="14" viewBox="0 0 24 24" fill="#F7E7A9" aria-hidden="true"><path d="M12 0l2.5 9.5L24 12l-9.5 2.5L12 24l-2.5-9.5L0 12l9.5-2.5z" /></svg>
-                <svg className="absolute bottom-4 right-6 opacity-80" width="10" height="10" viewBox="0 0 24 24" fill="#F7E7A9" aria-hidden="true"><path d="M12 0l2.5 9.5L24 12l-9.5 2.5L12 24l-2.5-9.5L0 12l9.5-2.5z" /></svg>
-                <div className="relative flex w-44 flex-col gap-1.5">
-                  <span className="self-start rounded-full bg-[#E8C872] px-2.5 py-0.5 text-[11px] font-bold text-[#0F0F11]">โปรโมชันพิเศษ</span>
-                  <b className="text-2xl leading-tight">โบนัสเพชร +20%</b>
-                  <span className="text-xs text-[#ECEAF0]">เติมวันนี้ รับทันที</span>
-                </div>
-              </div>
+      <ul className="space-y-2">
+        {matches.map((m) => (
+          <li key={m.id} className={`${card} flex items-center gap-3 !p-4`}>
+            <span className="w-24 shrink-0 text-xs text-sky-500">{m.date}</span>
+            <span className="flex-1 text-right text-sky-900">{m.home}</span>
+            <span className="rounded-lg bg-sky-100 px-3 py-1 font-mono font-semibold tabular-nums text-sky-900">
+              {m.hs ?? "-"} : {m.as ?? "-"}
+            </span>
+            <span className="flex-1 text-sky-900">{m.away}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-              <div className="mt-4 flex gap-2 overflow-x-auto">
-                {FILTERS.map(([k, n]) => (
-                  <button key={k} onClick={() => setFilter(k)} className={`h-9 shrink-0 rounded-full px-4 text-[13px] ${filter === k ? "bg-[#E8C872] font-bold text-[#0F0F11]" : "bg-[#26262B] text-[#ECEAF0]"}`}>{n}</button>
-                ))}
-              </div>
+/* ------------------------------------------------------------------ */
+/*  3. Stopwatch                                                       */
+/* ------------------------------------------------------------------ */
 
-              <h2 className="mb-2 mt-4 font-bold">เกมยอดนิยม</h2>
-              <div className="grid grid-cols-3 gap-3">
-                {games.map((g) => (
-                  <button key={g.id} onClick={() => { setGame(g); setPkg(PACKAGES[1]); setScreen("pkg"); }} className="flex flex-col items-center gap-1.5">
-                    <span className={`${cardC} flex w-full justify-center p-2.5 transition active:scale-95`}><Icon k={g.icon} bg={g.bg} fg={g.fg} size={64} radius={16} /></span>
-                    <span className="text-xs">{g.name}</span>
-                  </button>
-                ))}
-                {games.length === 0 && <p className="col-span-3 py-6 text-center text-sm opacity-70">ไม่พบเกมที่ค้นหา</p>}
-              </div>
+function fmtMs(ms: number) {
+  const cs = Math.floor(ms / 10) % 100;
+  const s = Math.floor(ms / 1000) % 60;
+  const m = Math.floor(ms / 60000) % 60;
+  const h = Math.floor(ms / 3600000);
+  return `${h > 0 ? pad(h) + ":" : ""}${pad(m)}:${pad(s)}.${pad(cs)}`;
+}
 
-              <h2 className="mb-2 mt-4 font-bold">โปรโมชันวันนี้</h2>
-              {([["gem", "#4A4A52", "#E8C872", "เพชรโบนัสเท่าตัว"], ["sword", "#9A6724", "#fff", "ซื้อ 2 แถม 1"]] as const).map(([k, b, f, t]) => (
-                <div key={t} className={`${cardC} mb-2 flex items-center gap-3 p-3`}>
-                  <Icon k={k} bg={b} fg={f} size={48} radius={12} />
-                  <div className="flex-1"><b>{t}</b><div className="text-xs text-[#B5B3BC]">เติมครบ ฿ 299 รับของแถม</div></div>
-                  <span className="rounded-full bg-[#9A6724] px-2.5 py-0.5 text-xs font-bold">HOT</span>
-                </div>
-              ))}
-            </div>
-            <Nav active={0} />
-          </>
-        )}
+function StopwatchTab() {
+  const [elapsed, setElapsed] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [laps, setLaps] = useState<number[]>([]);
+  const startRef = useRef(0);
+  const baseRef = useRef(0);
 
-        {/* 2) เลือกแพ็กเกจ */}
-        {screen === "pkg" && (
-          <>
-            <div className="h-full overflow-y-auto px-4 pb-44">
-              <Back to="home" title={`เติม${game.name}`} />
-              <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-[#44444C] to-[#1F1F24] p-3">
-                <Icon k={game.icon} bg="#0F0F11" fg={game.fg} size={64} radius={16} />
-                <div><b className="text-lg">{game.name}</b><div className="text-xs text-[#ECEAF0]">เติมทันที · รองรับหลายเซิร์ฟเวอร์</div></div>
-              </div>
-              <h2 className="mb-2 mt-4 font-bold"><span className="text-[#E8C872]">1.</span> กรอกข้อมูลบัญชี</h2>
-              <input className={`${inputC} mb-2`} inputMode="numeric" maxLength={15} value={uid} onChange={(e) => setUid(e.target.value.replace(/\D/g, ""))} placeholder="ไอดีผู้เล่น (UID)" aria-label="ไอดีผู้เล่น" />
-              <select className={`${inputC} [color-scheme:dark]`} value={server} onChange={(e) => setServer(e.target.value)} aria-label="เซิร์ฟเวอร์">
-                <option value="">เลือกเซิร์ฟเวอร์</option>
-                {SERVERS.map((s) => <option key={s}>{s}</option>)}
-              </select>
-              <h2 className="mb-3 mt-4 font-bold"><span className="text-[#E8C872]">2.</span> เลือกแพ็กเกจ</h2>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-                {PACKAGES.map((p) => (
-                  <button key={p.id} onClick={() => setPkg(p)} aria-pressed={pkg.id === p.id} className={`relative flex h-[100px] flex-col items-center justify-center gap-1.5 rounded-2xl border-2 ${pkg.id === p.id ? "border-[#E8C872] bg-[#26262B] shadow-[0_0_0_1px_rgba(232,200,114,.5),0_10px_30px_-12px_rgba(232,200,114,.45)]" : "border-[#3A3A41] bg-[#1A1A1E]"}`}>
-                    {p.hot && <span className="absolute -top-2.5 right-2.5 rounded-full bg-[#9A6724] px-2.5 py-0.5 text-xs font-bold">ยอดนิยม</span>}
-                    <span className="flex items-center gap-2"><Icon k="gem" bg="#4A4A52" fg="#E8C872" size={32} radius={10} /><b className="text-[17px]">{p.amount.split(" ")[0]}</b></span>
-                    <b className="text-[#E8C872]">{baht(p.price)}</b>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Footer>
-              <div className="flex items-center justify-between"><span className="text-sm text-[#B5B3BC]">ยอดรวม</span><b className="text-[22px] text-[#E8C872]">{baht(pkg.price)}</b></div>
-              <button className={btnY} onClick={toPay}>ถัดไป</button>
-            </Footer>
-          </>
-        )}
+  useEffect(() => {
+    if (!running) return;
+    startRef.current = performance.now();
+    let raf = 0;
+    const tick = () => {
+      setElapsed(baseRef.current + performance.now() - startRef.current);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      baseRef.current += performance.now() - startRef.current;
+    };
+  }, [running]);
 
-        {/* 3) ชำระเงิน */}
-        {screen === "pay" && (
-          <>
-            <div className="h-full overflow-y-auto px-4 pb-36">
-              <Back to="pkg" title="ชำระเงิน" />
-              <div className={`${cardC} flex items-center gap-3 p-3`}>
-                <Icon k={game.icon} bg={game.bg} fg={game.fg} size={56} />
-                <div className="flex-1"><b>{game.name}</b><div className="text-xs text-[#B5B3BC]">{pkg.amount} · UID {uid}</div></div>
-                <b className="text-[#E8C872]">{baht(pkg.price)}</b>
-              </div>
-              <h2 className="mb-2 mt-4 font-bold">เลือกวิธีชำระเงิน</h2>
-              {PAYS.map((m) => (
-                <button key={m.id} onClick={() => setPay(m.id)} aria-pressed={pay === m.id} className={`mb-2 flex h-[62px] w-full items-center gap-3 rounded-2xl border-2 px-3 ${pay === m.id ? "border-[#E8C872] bg-[#26262B] shadow-[0_0_0_1px_rgba(232,200,114,.5),0_10px_30px_-12px_rgba(232,200,114,.45)]" : "border-[#3A3A41] bg-[#1A1A1E]"}`}>
-                  <Icon k={m.icon} bg={m.bg} size={40} radius={12} />
-                  <b className="flex-1 text-left">{m.name}</b>
-                  <span className={`h-[22px] w-[22px] rounded-full border-2 border-[#E8C872] ${pay === m.id ? "bg-[#E8C872]" : ""}`} />
-                </button>
-              ))}
-              <div className="mt-3 flex gap-2">
-                <input className={`${inputC} flex-1`} value={coupon} onChange={(e) => setCoupon(e.target.value)} placeholder="โค้ดส่วนลด (ลอง WELCOME10)" aria-label="โค้ดส่วนลด" />
-                <button className="h-12 w-24 rounded-xl border-2 border-[#D4AF37]/70 text-sm font-bold" onClick={applyCoupon}>ใช้โค้ด</button>
-              </div>
-              <div className={`${cardC} mt-4 p-3 text-sm`}>
-                <div className="flex justify-between py-1.5"><span className="text-[#B5B3BC]">ราคาแพ็กเกจ</span><span>{baht(pkg.price)}</span></div>
-                <div className="flex justify-between py-1.5"><span className="text-[#B5B3BC]">ส่วนลด</span><span className="text-[#3DDC97]">- {baht(pkg.price - total)}</span></div>
-                <div className="mt-1 flex justify-between border-t border-[#3A3A41] pt-2.5"><b>ยอดชำระ</b><b className="text-xl text-[#E8C872]">{baht(total)}</b></div>
-              </div>
-            </div>
-            <Footer>
-              <button className={btnY} disabled={busy} onClick={submit}>{busy ? "กำลังดำเนินการ…" : `ชำระเงิน ${baht(total)}`}</button>
-            </Footer>
-          </>
-        )}
+  const reset = () => {
+    setRunning(false);
+    baseRef.current = 0;
+    setElapsed(0);
+    setLaps([]);
+  };
 
-        {/* 8) ช่วยเหลือและติดต่อเรา */}
-        {screen === "help" && (
-          <div className="h-full overflow-y-auto px-4 pb-8">
-            <Back to="profile" title="ช่วยเหลือและติดต่อเรา" />
-            <h2 className="mb-2 font-bold">ติดต่อเรา</h2>
-            <div className={`${cardC} px-3`}>
-              {CONTACTS.map((c) => (
-                <div key={c.value} className="flex items-center gap-3 border-b border-[#3A3A41] py-3 last:border-0">
-                  <Icon k={c.icon} bg={c.bg} size={40} radius={12} />
-                  <div className="flex-1"><div className="text-xs text-[#B5B3BC]">{c.label}</div><b>{c.value}</b></div>
-                  <button onClick={() => copy(c.value)} className="h-9 rounded-2xl border border-[#3A3A41] bg-[#26262B] px-3 text-xs font-bold">คัดลอก</button>
-                </div>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-[#B5B3BC]">เวลาทำการ 09:00–21:00 ทุกวัน</p>
-            <h2 className="mb-2 mt-5 font-bold">คำถามที่พบบ่อย</h2>
-            <div className={`${cardC} px-3`}>
-              {FAQS.map(([q, a], i) => (
-                <div key={q} className="border-b border-[#3A3A41] last:border-0">
-                  <button aria-expanded={faqOpen === i} onClick={() => setFaqOpen(faqOpen === i ? -1 : i)} className="flex w-full items-center justify-between gap-3 py-3 text-left">
-                    <span className="font-semibold">{q}</span>
-                    <span className="text-[#E8C872]" aria-hidden="true">{faqOpen === i ? "−" : "+"}</span>
-                  </button>
-                  {faqOpen === i && <p className="pb-3 text-sm text-white/80">{a}</p>}
-                </div>
-              ))}
-            </div>
-            <h2 className="mb-2 mt-5 font-bold">แจ้งปัญหา</h2>
-            <div className="flex flex-col gap-2">
-              <select className={`${inputC} [color-scheme:dark]`} value={helpTopic} onChange={(e) => setHelpTopic(e.target.value)} aria-label="หัวข้อปัญหา">
-                <option value="">เลือกหัวข้อปัญหา</option>
-                {HELP_TOPICS.map((t) => <option key={t}>{t}</option>)}
-              </select>
-              <textarea rows={4} value={helpMsg} onChange={(e) => setHelpMsg(e.target.value)} aria-label="รายละเอียดปัญหา" placeholder="อธิบายปัญหาที่พบ (ใส่เลขที่คำสั่งซื้อถ้ามี)" className="w-full rounded-xl border-2 border-[#3A3A41] bg-[#1A1A1E] p-3 text-base text-white outline-none placeholder:text-white/50 focus:border-[#E8C872]" />
-              <button className={`${btnY} !h-[52px]`} onClick={sendHelp}>ส่งเรื่อง</button>
-            </div>
-          </div>
-        )}
-
-        {/* 7) บัญชี */}
-        {screen === "profile" && (
-          <>
-            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
-              <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">บัญชี</h1></div>
-              <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#44444C] to-[#1F1F24] p-4">
-                <div className="rounded-full bg-[conic-gradient(from_200deg,#F7E7A9,#B8892B,#F7E7A9,#8A6A2F,#F7E7A9)] p-[3px]"><Icon k="crown" bg="#3A3A41" fg="#E8C872" size={64} radius={32} /></div>
-                <div className="flex-1"><b className="text-lg">ผู้เล่นตัวอย่าง</b><div className="text-xs">ID 10023456</div></div>
-                <span className="rounded-full bg-[#E8C872] px-2.5 py-0.5 text-xs font-bold text-[#0F0F11]">สมาชิก Gold</span>
-              </div>
-              <div className={`${cardC} mt-3 flex py-3`}>
-                {([[orders.length, "คำสั่งซื้อ"], [baht(orders.reduce((a, o) => a + o.total, 0)), "ยอดเติมรวม"], [savedCode ? 1 : 0, "โค้ดที่เก็บไว้"]] as const).map(([v, l]) => (
-                  <div key={l} className="flex flex-1 flex-col items-center gap-0.5"><b className="text-lg text-[#E8C872]">{v}</b><span className="text-xs text-[#B5B3BC]">{l}</span></div>
-                ))}
-              </div>
-              <div className={`${cardC} mt-3 px-3`}>
-                <MenuRow k="shield" bg="#4A4A52" title="ข้อมูลส่วนตัว" sub="ผู้เล่นตัวอย่าง" onClick={() => soon("ข้อมูลส่วนตัว")} />
-                <MenuRow k="gem" bg="#9A6724" title="ไอดีเกมที่บันทึกไว้" sub={lastUid || "ยังไม่มี"} onClick={() => soon("ไอดีเกม")} />
-                <MenuRow k="cart" bg="#8A6A2F" title="คำสั่งซื้อของฉัน" sub={`${orders.length} รายการ`} onClick={() => { setOrdFilter("all"); setScreen("orders"); }} />
-                <MenuRow k="star" bg="#5B6B7A" title="โปรโมชันของฉัน" sub={savedCode ? `เก็บโค้ด ${savedCode}` : "ยังไม่ได้เก็บโค้ด"} onClick={() => setScreen("promos")} />
-                <div className="flex items-center gap-3 border-b border-[#3A3A41] py-3">
-                  <Icon k="star" bg="#E8C872" fg="#0F0F11" size={36} radius={10} />
-                  <div className="flex-1">การแจ้งเตือน</div>
-                  <button role="switch" aria-checked={notif} aria-label="การแจ้งเตือน" onClick={() => setNotif(!notif)} className={`relative h-7 w-12 rounded-full ${notif ? "bg-[#3DDC97]" : "bg-[#3A3A41]"}`}>
-                    <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all ${notif ? "left-[22px]" : "left-0.5"}`} />
-                  </button>
-                </div>
-                <MenuRow k="shield" bg="#5F7A6A" title="ช่วยเหลือและติดต่อเรา" onClick={() => setScreen("help")} />
-              </div>
-              <button className={`${btnO} mt-4 !h-[52px]`} onClick={() => soon("ออกจากระบบ")}>ออกจากระบบ</button>
-            </div>
-            <Nav active={3} />
-          </>
-        )}
-
-        {/* 6) โปรโมชัน */}
-        {screen === "promos" && (
-          <>
-            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
-              <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">โปรโมชัน</h1></div>
-              <div className="relative mb-4 flex h-[110px] items-center overflow-hidden rounded-3xl bg-gradient-to-br from-[#44444C] to-[#1F1F24] px-5">
-                <div className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-[#9A6724]" />
-                <svg className="absolute right-5 top-4" width="78" height="78" viewBox="0 0 48 48" fill="#E8C872" aria-hidden="true">{GLYPH.gem}</svg>
-                <div className="relative w-48"><b className="text-xl leading-tight">โปรโมชันสุดคุ้ม</b><div className="mt-1 text-xs">เก็บโค้ดไว้ใช้ตอนชำระเงิน</div></div>
-              </div>
-              <div className="mb-4 flex gap-2 overflow-x-auto">
-                {PROMO_FILTERS.map((k) => (
-                  <button key={k} onClick={() => setPromoFilter(k)} className={`h-9 shrink-0 rounded-full px-4 text-[13px] ${promoFilter === k ? "bg-[#E8C872] font-bold text-[#0F0F11]" : "bg-[#26262B] text-[#ECEAF0]"}`}>{k}</button>
-                ))}
-              </div>
-              {promos.map((x) => (
-                <div key={x.title} className={`${cardC} mb-3 p-3`}>
-                  <div className="flex items-center gap-3">
-                    <Icon k={x.icon} bg={x.bg} fg={x.fg} size={48} radius={12} />
-                    <div className="flex-1"><b>{x.title}</b><div className="text-xs text-[#B5B3BC]">{x.desc}</div></div>
-                    <span className="rounded-full bg-[#9A6724] px-2.5 py-0.5 text-xs font-bold">{x.tag}</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-[#3A3A41] pt-3 text-xs">
-                    <span className="text-[#B5B3BC]">หมดเขต {x.end}</span>
-                    {x.code ? (
-                      savedCode === x.code
-                        ? <span className="font-bold text-[#3DDC97]">เก็บแล้ว · {x.code}</span>
-                        : <button className="h-9 rounded-2xl bg-[#E8C872] px-3 text-sm font-bold text-[#0F0F11]" onClick={() => { setSavedCode(x.code); say(`เก็บโค้ด ${x.code} แล้ว ใช้ได้ตอนชำระเงิน`, "ok"); }}>เก็บโค้ด {x.code}</button>
-                    ) : <span className="text-[#E8C872]">ใช้อัตโนมัติ</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Nav active={2} />
-          </>
-        )}
-
-        {/* 5) คำสั่งซื้อของฉัน */}
-        {screen === "orders" && (
-          <>
-            <div className="h-[calc(100%-68px)] overflow-y-auto px-4 pb-4">
-              <div className="flex h-[60px] items-center"><h1 className="flex-1 text-2xl font-bold">คำสั่งซื้อของฉัน</h1></div>
-              <div className="mb-4 flex gap-2 overflow-x-auto">
-                {([["all", "ทั้งหมด"], ["processing", "กำลังเติม"], ["success", "สำเร็จ"]] as const).map(([k, n]) => (
-                  <button key={k} onClick={() => setOrdFilter(k)} className={`h-9 shrink-0 rounded-full px-4 text-[13px] ${ordFilter === k ? "bg-[#E8C872] font-bold text-[#0F0F11]" : "bg-[#26262B] text-[#ECEAF0]"}`}>{n}</button>
-                ))}
-              </div>
-              {shown.length === 0 && <p className="py-10 text-center text-sm opacity-70">ยังไม่มีคำสั่งซื้อ</p>}
-              {shown.map((o) => {
-                const g = GAMES.find((x) => x.id === o.gameId) ?? GAMES[0];
-                const ok = o.status === "success";
-                const isOpen = openId === o.id;
-                return (
-                  <button key={o.id} aria-expanded={isOpen} onClick={() => setOpenId(isOpen ? null : o.id)} className={`${cardC} mb-3 block w-full p-3 text-left`}>
-                    <div className="flex items-center gap-3">
-                      <Icon k={g.icon} bg={g.bg} fg={g.fg} size={48} radius={12} />
-                      <div className="flex-1"><b>{o.game} · {o.amount}</b><div className="text-xs text-[#B5B3BC]">{o.time}</div></div>
-                      <div className="text-right">
-                        <b className="text-[#E8C872]">{baht(o.total)}</b>
-                        <div className="mt-1"><span className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-[#0F0F11] ${ok ? "bg-[#3DDC97]" : "bg-[#E8C872]"}`}>{ok ? "สำเร็จ" : "กำลังเติม"}</span></div>
-                      </div>
-                    </div>
-                    {isOpen && (
-                      <div className="mt-3 border-t border-[#3A3A41] pt-2 text-sm">
-                        {([["เลขที่คำสั่งซื้อ", o.id], ["UID", o.uid], ["วิธีชำระเงิน", PAYS.find((m) => m.id === o.pay)?.name ?? o.pay]] as const).map(([a, b]) => (
-                          <div key={a} className="flex justify-between py-1"><span className="text-[#B5B3BC]">{a}</span><span>{b}</span></div>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <Nav active={1} />
-          </>
-        )}
-
-        {/* 4) สำเร็จ */}
-        {screen === "done" && order && (
-          <>
-            <div className="h-full overflow-y-auto px-4 pb-52">
-              <div className="flex h-[60px] items-center justify-center font-bold">สถานะคำสั่งซื้อ</div>
-              <div className="relative mx-auto mt-2 h-[130px] w-[150px]">
-                <div className="absolute left-[25px] top-[15px] flex h-[100px] w-[100px] items-center justify-center rounded-full bg-[#3DDC97]">
-                  <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#0F0F11" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
-                </div>
-                <svg className="absolute left-0 top-0" width="34" height="34" viewBox="0 0 48 48" fill="#E8C872" aria-hidden="true">{GLYPH.gem}</svg>
-                <svg className="absolute right-0 top-[70px]" width="40" height="40" viewBox="0 0 48 48" fill="#9A6724" aria-hidden="true">{GLYPH.star}</svg>
-                <svg className="absolute right-3.5 top-0" width="26" height="26" viewBox="0 0 48 48" fill="#E8C872" aria-hidden="true">{GLYPH.star}</svg>
-              </div>
-              <div className="mt-4 text-center"><h2 className="text-2xl font-bold">ชำระเงินสำเร็จ</h2><p className="mt-1 text-xs text-[#B5B3BC]">ระบบกำลังเติมให้อัตโนมัติ ปกติไม่เกิน 5 นาที</p></div>
-              <div className="mt-5 flex">
-                {["ชำระแล้ว", "กำลังเติม", "สำเร็จ"].map((n, i) => (
-                  <div key={n} className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className={`flex h-[30px] w-[30px] items-center justify-center rounded-full text-[13px] font-bold ${i < 2 ? "bg-[#3DDC97] text-[#0F0F11]" : "bg-[#3A3A41] text-[#B5B3BC]"}`}>{i + 1}</div>
-                    <span className={`text-xs ${i < 2 ? "font-bold" : "text-[#B5B3BC]"}`}>{n}</span>
-                  </div>
-                ))}
-              </div>
-              <div className={`${cardC} mt-5 p-3 text-sm`}>
-                {([["เลขที่คำสั่งซื้อ", order.id], ["เกม", order.game], ["แพ็กเกจ", order.amount], ["UID", order.uid], ["วิธีชำระเงิน", PAYS.find((m) => m.id === order.pay)?.name ?? order.pay], ["เวลา", order.time], ["ยอดชำระ", baht(order.total)]] as const).map(([a, b]) => (
-                  <div key={a} className="flex justify-between py-1.5"><span className="text-[#B5B3BC]">{a}</span><span>{b}</span></div>
-                ))}
-              </div>
-            </div>
-            <Footer>
-              <button className={btnY} onClick={() => { setOrdFilter("all"); setScreen("orders"); }}>ดูคำสั่งซื้อของฉัน</button>
-              <button className={btnO} onClick={reset}>กลับหน้าแรก</button>
-            </Footer>
-          </>
-        )}
+  return (
+    <div className="space-y-4">
+      <div className={`${card} text-center`}>
+        <div className="font-mono text-6xl font-semibold tabular-nums text-sky-900">
+          {fmtMs(elapsed)}
+        </div>
+        <div className="mt-5 flex justify-center gap-3">
+          <button onClick={() => setRunning((r) => !r)} className={btnPrimary}>
+            {running ? "หยุด" : elapsed > 0 ? "เริ่มต่อ" : "เริ่ม"}
+          </button>
+          <button
+            onClick={() => setLaps((l) => [elapsed, ...l])}
+            disabled={!running}
+            className={`${btnGhost} disabled:opacity-40`}
+          >
+            บันทึกรอบ
+          </button>
+          <button onClick={reset} className={btnGhost}>
+            รีเซ็ต
+          </button>
         </div>
       </div>
+      {laps.length > 0 && (
+        <ul className={`${card} divide-y divide-sky-100`}>
+          {laps.map((t, i) => {
+            const prev = laps[i + 1] ?? 0;
+            return (
+              <li key={laps.length - i} className="flex justify-between py-2 font-mono tabular-nums">
+                <span className="text-sky-500">รอบ {laps.length - i}</span>
+                <span className="text-sky-700">+{fmtMs(t - prev)}</span>
+                <span className="text-sky-900">{fmtMs(t)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  4. Alarm                                                           */
+/* ------------------------------------------------------------------ */
+
+type Alarm = { id: number; time: string; label: string; on: boolean };
+
+function beep() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new Ctx();
+    [0, 0.35, 0.7, 1.05].forEach((t) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = 880;
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.2, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.3);
+      o.start(ctx.currentTime + t);
+      o.stop(ctx.currentTime + t + 0.3);
+    });
+  } catch {}
+}
+
+function AlarmTab() {
+  const now = useNow();
+  const [alarms, setAlarms] = useLocalStorage<Alarm[]>("clock-alarms", []);
+  const [time, setTime] = useState("07:00");
+  const [label, setLabel] = useState("");
+  const [ringing, setRinging] = useState<Alarm | null>(null);
+  const lastFired = useRef("");
+
+  useEffect(() => {
+    if (!now) return;
+    const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    if (now.getSeconds() > 1) return;
+    const key = `${now.toDateString()} ${hhmm}`;
+    if (lastFired.current === key) return;
+    const hit = alarms.find((a) => a.on && a.time === hhmm);
+    if (hit) {
+      lastFired.current = key;
+      setRinging(hit);
+      beep();
+    }
+  }, [now, alarms]);
+
+  const add = () =>
+    setAlarms((a) =>
+      [...a, { id: Date.now(), time, label: label.trim(), on: true }].sort((x, y) =>
+        x.time.localeCompare(y.time)
+      )
+    );
+
+  return (
+    <div className="space-y-4">
+      {ringing && (
+        <div className="flex items-center justify-between rounded-2xl bg-rose-500 p-4 text-white shadow-lg">
+          <div>
+            <div className="text-2xl font-semibold">{ringing.time}</div>
+            <div>{ringing.label || "ถึงเวลาแล้ว"}</div>
+          </div>
+          <button
+            onClick={() => setRinging(null)}
+            className={`${btn} bg-white text-rose-600 hover:bg-rose-50`}
+          >
+            ปิดเสียง
+          </button>
+        </div>
+      )}
+
+      <div className={`${card} flex flex-wrap items-end gap-3`}>
+        <label className="text-sm text-sky-700">
+          เวลา
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="mt-1 block rounded-xl border border-sky-200 bg-white px-3 py-2 text-sky-900"
+          />
+        </label>
+        <label className="min-w-40 flex-1 text-sm text-sky-700">
+          ชื่อ
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="เช่น ตื่นนอน"
+            className="mt-1 block w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-sky-900"
+          />
+        </label>
+        <button onClick={add} className={btnPrimary}>
+          เพิ่มนาฬิกาปลุก
+        </button>
+      </div>
+
+      {alarms.length === 0 ? (
+        <p className="text-center text-sky-600">ยังไม่มีนาฬิกาปลุก ตั้งเวลาด้านบนแล้วกดเพิ่ม</p>
+      ) : (
+        <ul className="space-y-2">
+          {alarms.map((a) => (
+            <li key={a.id} className={`${card} flex items-center justify-between !p-4`}>
+              <div>
+                <div className="font-mono text-3xl tabular-nums text-sky-900">{a.time}</div>
+                <div className="text-sm text-sky-600">{a.label || "นาฬิกาปลุก"}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  role="switch"
+                  aria-checked={a.on}
+                  aria-label={`เปิดปิดนาฬิกาปลุก ${a.time}`}
+                  onClick={() =>
+                    setAlarms((l) => l.map((x) => (x.id === a.id ? { ...x, on: !x.on } : x)))
+                  }
+                  className={`relative h-7 w-12 rounded-full transition ${
+                    a.on ? "bg-sky-500" : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${
+                      a.on ? "left-[22px]" : "left-0.5"
+                    }`}
+                  />
+                </button>
+                <button
+                  onClick={() => setAlarms((l) => l.filter((x) => x.id !== a.id))}
+                  className="text-sm text-rose-500 hover:underline"
+                >
+                  ลบ
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-sky-500">
+        นาฬิกาปลุกทำงานเมื่อเปิดหน้านี้ค้างไว้ในเบราว์เซอร์เท่านั้น
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  5. Calendar                                                        */
+/* ------------------------------------------------------------------ */
+
+const TH_DAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+
+function CalendarTab() {
+  const today = useNow(60000);
+  const [cursor, setCursor] = useState<{ y: number; m: number } | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [notes, setNotes] = useLocalStorage<Record<string, string>>("clock-notes", {});
+
+  useEffect(() => {
+    if (today && !cursor) setCursor({ y: today.getFullYear(), m: today.getMonth() });
+  }, [today, cursor]);
+
+  if (!cursor || !today) return null;
+
+  const first = new Date(cursor.y, cursor.m, 1);
+  const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array(first.getDay()).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const key = (d: number) => `${cursor.y}-${pad(cursor.m + 1)}-${pad(d)}`;
+  const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const move = (delta: number) => {
+    const d = new Date(cursor.y, cursor.m + delta, 1);
+    setCursor({ y: d.getFullYear(), m: d.getMonth() });
+    setSelected(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={card}>
+        <div className="mb-4 flex items-center justify-between">
+          <button onClick={() => move(-1)} className={btnGhost} aria-label="เดือนก่อนหน้า">
+            ‹
+          </button>
+          <h2 className="text-lg font-semibold text-sky-900">
+            {first.toLocaleDateString("th-TH", { month: "long", year: "numeric" })}
+          </h2>
+          <button onClick={() => move(1)} className={btnGhost} aria-label="เดือนถัดไป">
+            ›
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-sm">
+          {TH_DAYS.map((d, i) => (
+            <div key={d} className={`py-1 font-medium ${i === 0 ? "text-rose-400" : "text-sky-500"}`}>
+              {d}
+            </div>
+          ))}
+          {cells.map((d, i) =>
+            d === null ? (
+              <div key={i} />
+            ) : (
+              <button
+                key={i}
+                onClick={() => setSelected(key(d))}
+                className={`relative aspect-square rounded-xl text-sky-900 transition hover:bg-sky-100 ${
+                  key(d) === todayKey ? "bg-sky-500 !text-white hover:bg-sky-600" : ""
+                } ${selected === key(d) ? "ring-2 ring-sky-500" : ""}`}
+              >
+                {d}
+                {notes[key(d)] && (
+                  <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-rose-400" />
+                )}
+              </button>
+            )
+          )}
+        </div>
+      </div>
+
+      {selected && (
+        <div className={card}>
+          <label className="text-sm text-sky-700">
+            บันทึกของวันที่ {selected}
+            <textarea
+              value={notes[selected] ?? ""}
+              onChange={(e) => setNotes((n) => ({ ...n, [selected]: e.target.value }))}
+              rows={3}
+              className="mt-1 block w-full rounded-xl border border-sky-200 bg-white p-3 text-sky-900"
+              placeholder="เช่น นัดหมาย งานที่ต้องทำ"
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  6. Weather                                                         */
+/* ------------------------------------------------------------------ */
+
+const WMO: Record<number, [string, string]> = {
+  0: ["ท้องฟ้าแจ่มใส", "☀️"],
+  1: ["แจ่มใสเป็นส่วนใหญ่", "🌤️"],
+  2: ["มีเมฆบางส่วน", "⛅"],
+  3: ["มีเมฆมาก", "☁️"],
+  45: ["หมอก", "🌫️"],
+  48: ["หมอกน้ำค้างแข็ง", "🌫️"],
+  51: ["ฝนปรอย", "🌦️"],
+  53: ["ฝนปรอย", "🌦️"],
+  55: ["ฝนปรอยหนา", "🌦️"],
+  61: ["ฝนเล็กน้อย", "🌧️"],
+  63: ["ฝนปานกลาง", "🌧️"],
+  65: ["ฝนหนัก", "🌧️"],
+  80: ["ฝนซู่", "🌦️"],
+  81: ["ฝนซู่ปานกลาง", "🌧️"],
+  82: ["ฝนซู่หนัก", "⛈️"],
+  95: ["พายุฟ้าคะนอง", "⛈️"],
+  96: ["พายุฟ้าคะนองและลูกเห็บ", "⛈️"],
+  99: ["พายุฟ้าคะนองและลูกเห็บ", "⛈️"],
+};
+const wmo = (c: number) => WMO[c] ?? ["ไม่ทราบสภาพอากาศ", "🌡️"];
+
+type WeatherData = {
+  current: { temperature_2m: number; relative_humidity_2m: number; wind_speed_10m: number; weather_code: number };
+  daily: { time: string[]; weather_code: number[]; temperature_2m_max: number[]; temperature_2m_min: number[] };
+};
+
+const FALLBACK_COORDS = { lat: 13.7563, lon: 100.5018, name: "กรุงเทพฯ" };
+
+function WeatherTab() {
+  const [data, setData] = useState<WeatherData | null>(null);
+  const [place, setPlace] = useState(FALLBACK_COORDS.name);
+  const [error, setError] = useState(false);
+
+  const fetchWeather = useCallback(async (lat: number, lon: number) => {
+    try {
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        `&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error();
+      setData(await res.json());
+      setError(false);
+    } catch {
+      setError(true);
+    }
+  }, []);
+
+  const locate = useCallback(() => {
+    setData(null);
+    if (!navigator.geolocation) {
+      fetchWeather(FALLBACK_COORDS.lat, FALLBACK_COORDS.lon);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setPlace("ตำแหน่งของคุณ");
+        fetchWeather(p.coords.latitude, p.coords.longitude);
+      },
+      () => {
+        setPlace(FALLBACK_COORDS.name);
+        fetchWeather(FALLBACK_COORDS.lat, FALLBACK_COORDS.lon);
+      },
+      { timeout: 8000 }
+    );
+  }, [fetchWeather]);
+
+  useEffect(() => {
+    locate();
+  }, [locate]);
+
+  if (error)
+    return (
+      <p className="rounded-xl bg-amber-50 p-3 text-amber-800">
+        โหลดข้อมูลอากาศไม่สำเร็จ{" "}
+        <button className="underline" onClick={locate}>
+          ลองอีกครั้ง
+        </button>
+      </p>
+    );
+  if (!data) return <p className="text-sky-600">กำลังโหลดสภาพอากาศ…</p>;
+
+  const [desc, icon] = wmo(data.current.weather_code);
+  return (
+    <div className="space-y-4">
+      <div className={`${card} text-center`}>
+        <div className="text-sm text-sky-600">{place}</div>
+        <div className="text-7xl">{icon}</div>
+        <div className="font-mono text-6xl font-semibold tabular-nums text-sky-900">
+          {Math.round(data.current.temperature_2m)}°
+        </div>
+        <div className="text-sky-700">{desc}</div>
+        <div className="mt-3 flex justify-center gap-6 text-sm text-sky-600">
+          <span>ความชื้น {data.current.relative_humidity_2m}%</span>
+          <span>ลม {Math.round(data.current.wind_speed_10m)} กม./ชม.</span>
+        </div>
+      </div>
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {data.daily.time.slice(0, 7).map((d, i) => (
+          <li key={d} className={`${card} text-center !p-3`}>
+            <div className="text-xs text-sky-500">
+              {new Date(d).toLocaleDateString("th-TH", { weekday: "short", day: "numeric" })}
+            </div>
+            <div className="text-2xl">{wmo(data.daily.weather_code[i])[1]}</div>
+            <div className="text-sm tabular-nums text-sky-900">
+              {Math.round(data.daily.temperature_2m_max[i])}° / {Math.round(data.daily.temperature_2m_min[i])}°
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  7. Stock chart                                                     */
+/* ------------------------------------------------------------------ */
+
+/*
+ * ข้อมูลหุ้นด้านล่างเป็นข้อมูลจำลอง (random walk แบบคงที่ตาม symbol)
+ * ถ้าต้องการข้อมูลจริง ให้สร้าง Route Handler (app/api/stock/route.ts)
+ * ดึงจาก Alpha Vantage / Finnhub / Yahoo Finance แล้วเปลี่ยน series() ให้เรียก API นั้น
+ */
+
+const SYMBOLS = [
+  { sym: "PTT", name: "ปตท.", base: 34 },
+  { sym: "AOT", name: "ท่าอากาศยานไทย", base: 60 },
+  { sym: "CPALL", name: "ซีพี ออลล์", base: 58 },
+  { sym: "KBANK", name: "ธนาคารกสิกรไทย", base: 150 },
+];
+
+function seeded(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 1664525 + 1013904223) % 4294967296;
+    return s / 4294967296;
+  };
+}
+
+function series(sym: string, base: number, days: number) {
+  const rnd = seeded([...sym].reduce((a, c) => a * 31 + c.charCodeAt(0), 7));
+  const out: number[] = [];
+  let v = base;
+  for (let i = 0; i < days; i++) {
+    v = Math.max(1, v * (1 + (rnd() - 0.48) * 0.04));
+    out.push(Number(v.toFixed(2)));
+  }
+  return out;
+}
+
+function StockTab() {
+  const [idx, setIdx] = useState(0);
+  const [range, setRange] = useState(30);
+  const [hover, setHover] = useState<number | null>(null);
+  const s = SYMBOLS[idx];
+  const data = useMemo(() => series(s.sym, s.base, range), [s, range]);
+
+  const W = 600,
+    H = 260,
+    P = 28;
+  const min = Math.min(...data),
+    max = Math.max(...data);
+  const x = (i: number) => P + (i / (data.length - 1)) * (W - P * 2);
+  const y = (v: number) => H - P - ((v - min) / (max - min || 1)) * (H - P * 2);
+  const path = data.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${path} L${x(data.length - 1)},${H - P} L${x(0)},${H - P} Z`;
+  const last = data[data.length - 1];
+  const change = last - data[0];
+  const up = change >= 0;
+  const shown = hover ?? data.length - 1;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {SYMBOLS.map((x2, i) => (
+          <button key={x2.sym} onClick={() => setIdx(i)} className={idx === i ? btnPrimary : btnGhost}>
+            {x2.sym}
+          </button>
+        ))}
+      </div>
+      <div className={card}>
+        <div className="flex items-end justify-between">
+          <div>
+            <div className="text-sm text-sky-600">{s.name}</div>
+            <div className="font-mono text-4xl font-semibold tabular-nums text-sky-900">
+              {data[shown].toFixed(2)}
+            </div>
+          </div>
+          <div className={`font-mono text-lg tabular-nums ${up ? "text-emerald-600" : "text-rose-600"}`}>
+            {up ? "▲" : "▼"} {Math.abs(change).toFixed(2)} ({((change / data[0]) * 100).toFixed(2)}%)
+          </div>
+        </div>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="mt-3 w-full"
+          onMouseLeave={() => setHover(null)}
+          onMouseMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const px = ((e.clientX - r.left) / r.width) * W;
+            setHover(Math.max(0, Math.min(data.length - 1, Math.round(((px - P) / (W - P * 2)) * (data.length - 1)))));
+          }}
+          role="img"
+          aria-label={`กราฟราคาหุ้น ${s.sym}`}
+        >
+          <defs>
+            <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={up ? "#10b981" : "#f43f5e"} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={up ? "#10b981" : "#f43f5e"} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[0, 0.5, 1].map((t) => (
+            <g key={t}>
+              <line x1={P} x2={W - P} y1={P + t * (H - P * 2)} y2={P + t * (H - P * 2)} stroke="#e0f2fe" />
+              <text x={4} y={P + t * (H - P * 2) + 4} fontSize="10" fill="#7dd3fc">
+                {(max - t * (max - min)).toFixed(1)}
+              </text>
+            </g>
+          ))}
+          <path d={area} fill="url(#fill)" />
+          <path d={path} fill="none" stroke={up ? "#10b981" : "#f43f5e"} strokeWidth="2.5" strokeLinejoin="round" />
+          {hover !== null && (
+            <g>
+              <line x1={x(hover)} x2={x(hover)} y1={P} y2={H - P} stroke="#7dd3fc" strokeDasharray="4" />
+              <circle cx={x(hover)} cy={y(data[hover])} r="5" fill="#0ea5e9" stroke="#fff" strokeWidth="2" />
+            </g>
+          )}
+        </svg>
+        <div className="mt-2 flex gap-2">
+          {[7, 30, 90].map((r) => (
+            <button key={r} onClick={() => setRange(r)} className={range === r ? btnPrimary : btnGhost}>
+              {r} วัน
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-sky-500">ข้อมูลในกราฟเป็นข้อมูลจำลองเพื่อการสาธิต ไม่ใช่ราคาจริง</p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  App shell                                                          */
+/* ------------------------------------------------------------------ */
+
+export default function Page() {
+  const [tab, setTab] = useState<TabId>("time");
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-sky-50 to-sky-100 pb-24 text-slate-800">
+      <div className="mx-auto max-w-2xl px-4 pt-8">
+        <h1 className="mb-6 text-2xl font-semibold text-sky-900">
+          {TABS.find((t) => t.id === tab)?.label}
+        </h1>
+        {tab === "time" && <TimeTab />}
+        {tab === "football" && <FootballTab />}
+        {tab === "stopwatch" && <StopwatchTab />}
+        {tab === "alarm" && <AlarmTab />}
+        {tab === "calendar" && <CalendarTab />}
+        {tab === "weather" && <WeatherTab />}
+        {tab === "stock" && <StockTab />}
+      </div>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 border-t border-sky-100 bg-white/90 backdrop-blur"
+        aria-label="เมนูหลัก"
+      >
+        <ul className="mx-auto flex max-w-2xl overflow-x-auto">
+          {TABS.map((t) => (
+            <li key={t.id} className="flex-1">
+              <button
+                onClick={() => setTab(t.id)}
+                aria-current={tab === t.id ? "page" : undefined}
+                className={`w-full whitespace-nowrap px-3 py-4 text-sm transition ${
+                  tab === t.id
+                    ? "border-t-2 border-sky-500 font-semibold text-sky-700"
+                    : "border-t-2 border-transparent text-sky-400 hover:text-sky-600"
+                }`}
+              >
+                {t.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </main>
   );
 }
